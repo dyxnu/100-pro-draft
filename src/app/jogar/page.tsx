@@ -1,7 +1,7 @@
 import type { Metadata } from 'next';
 import { redirect } from 'next/navigation';
 import { getCurrentUser } from '@/lib/supabase/server';
-import { CreateRoomForm, JoinRoomForm } from './forms';
+import { CreateRoomForm, JoinRoomForm, TrainButton } from './forms';
 
 export const metadata: Metadata = { title: 'Jogar' };
 
@@ -21,6 +21,11 @@ export default async function JogarPage() {
           <h2 className="text-lg font-bold text-gold2">Criar sala</h2>
           <p className="mt-1 text-sm text-muted">Você vira o dono da sala e decide quando começar.</p>
           <div className="mt-5"><CreateRoomForm /></div>
+        </section>
+        <section className="panel p-6 md:col-span-2">
+          <h2 className="text-lg font-bold text-gold2">Treinar contra bots</h2>
+          <p className="mt-1 text-sm text-muted">Você contra 5 bots: leilão, escalação e campeonato completos, começando na hora.</p>
+          <div className="mt-4 max-w-xs"><TrainButton className="btn-primary w-full" /></div>
         </section>
         <section className="panel p-6">
           <h2 className="text-lg font-bold text-gold2">Entrar com código</h2>

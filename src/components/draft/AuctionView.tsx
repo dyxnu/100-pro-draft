@@ -66,12 +66,18 @@ export function AuctionView({ code, roomId, initialState, initialTournament, ini
     const sb = getBrowserClient();
     const ch = sb.channel(`leilao:${roomId}`)
       .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'auctions', filter: `room_id=eq.${roomId}` }, (p: { new: unknown }) => {
-        const row = p.new as { state?: AuctionState; tournament?: TournamentState | null; next_tick_at?: string | null };
-        if (row.state) apply(row.state, row.tournament ?? null, row.next_tick_at ? Date.parse(row.next_tick_at) : null);
+        // Colunas grandes que não mudaram podem vir vazias na mensagem: aproveita o que já temos.
+        const row = p.new as { state?: AuctionState | null; tournament?: TournamentState | null; next_tick_at?: string | null };
+        const nextTickAt = row.next_tick_at ? Date.parse(row.next_tick_at) : null;
+        setSnap(prev => {
+          const state = row.state ?? prev.state;
+          const tournament = row.tournament ?? prev.tournament;
+          return versionOf(state, tournament) >= versionOf(prev.state, prev.tournament) ? { state, tournament, nextTickAt } : prev;
+        });
       })
       .subscribe();
     return () => { sb.removeChannel(ch); };
-  }, [roomId, apply]);
+  }, [roomId]);
 
   // "Cutucada" no relógio do servidor quando um prazo vence (fim de lote, vez dos bots...).
   const done = snap.tournament?.stage === 'done';

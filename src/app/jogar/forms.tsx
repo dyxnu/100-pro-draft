@@ -1,7 +1,17 @@
 'use client';
 
 import { useActionState } from 'react';
-import { createRoomAction, goToRoomAction } from '@/app/sala/actions';
+import { createRoomAction, goToRoomAction, trainAction } from '@/app/sala/actions';
+
+export function TrainButton({ className = 'btn-secondary w-full' }: { className?: string }) {
+  const [state, action, pending] = useActionState(trainAction, {});
+  return (
+    <form action={action} className="space-y-2">
+      <button className={className} disabled={pending}>{pending ? 'Montando a sala…' : 'Treinar contra bots'}</button>
+      <ErrorText error={state.error} />
+    </form>
+  );
+}
 
 function ErrorText({ error }: { error?: string }) {
   if (!error) return null;

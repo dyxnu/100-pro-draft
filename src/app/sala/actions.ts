@@ -33,6 +33,17 @@ export async function createRoomAction(_: RoomFormState, form: FormData): Promis
   redirect(`/sala/${r.code}`);
 }
 
+/** "Treinar contra bots": cria uma sala só com bots e já começa o leilão. */
+export async function trainAction(): Promise<RoomFormState> {
+  const { user, profile } = await requireUser('/jogar');
+  if (!isAdminConfigured) return NOT_READY;
+  const r = await createRoom(user.id, profile!.username, { botsEnabled: true, speed: 'normal' });
+  if (!r.ok) return { error: r.reason };
+  const started = await startDraft(r.code, user.id);
+  if (!started.ok) return { error: started.reason };
+  redirect(`/sala/${r.code}`);
+}
+
 export async function goToRoomAction(_: RoomFormState, form: FormData): Promise<RoomFormState> {
   const code = normalizeCode(String(form.get('code') ?? ''));
   if (!/^[A-Z0-9]{6}$/.test(code)) return { error: 'O código tem 6 letras/números, ex.: A1B2C3.' };

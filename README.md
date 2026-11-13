@@ -46,7 +46,6 @@ src/
     supabase/                clientes e configuração
   middleware.ts              renova sessão e protege /perfil
 supabase/migrations/         esquema do banco + RLS + seed dos campeões
-public/prototipo/            protótipo jogável contra bots (HTML puro, roda no navegador)
 ```
 
 ## Segurança (decisões da Fase 1)

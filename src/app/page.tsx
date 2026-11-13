@@ -1,6 +1,7 @@
 import Link from 'next/link';
 import { Logo } from '@/components/Logo';
 import { getCurrentUser } from '@/lib/supabase/server';
+import { TrainButton } from './jogar/forms';
 
 const STEPS = [
   { n: '01', t: 'R$ 100 fictícios', d: 'Todo mundo começa com o mesmo orçamento. Ninguém sai com saldo para gastar fora do jogo.' },
@@ -32,9 +33,11 @@ export default async function Home() {
           <Link href={session ? '/jogar' : '/cadastro'} className="btn-primary px-6">
             {session ? 'Jogar com amigos' : 'Criar conta e jogar'}
           </Link>
-          <a href="/prototipo/index.html" className="btn-secondary px-6">Treinar contra bots</a>
+          {session
+            ? <TrainButton className="btn-secondary px-6" />
+            : <Link href="/entrar?next=/jogar" className="btn-secondary px-6">Treinar contra bots</Link>}
         </div>
-        <p className="mt-3 text-xs text-muted">O treino roda direto no seu navegador, sem precisar de conta.</p>
+        <p className="mt-3 text-xs text-muted">Leilão, escalação e campeonato no mini-mapa, contra 5 bots, começando na hora.</p>
       </section>
 
       <section className="grid gap-4 sm:grid-cols-3">
