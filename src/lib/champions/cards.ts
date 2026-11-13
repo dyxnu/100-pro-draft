@@ -1,0 +1,143 @@
+// Cartas dos campeões (estilo FIFA): atributos 40–99 e overall por rota.
+// Fonte: dados oficiais da Riot (Data Dragon: classes, avaliações de ataque/defesa/magia,
+// atributos base) + ajustes por kit (controle, mobilidade, utilidade, fases de força),
+// que não existem nos arquivos oficiais. Os ajustes ficam em CURATED e podem ser balanceados.
+import ddragon from './ddragon.json';
+import type { Role } from '@/lib/auction/engine';
+
+export type ChampClass = 'tanque' | 'lutador' | 'assassino' | 'mago' | 'atirador' | 'encantador';
+
+export interface Curated {
+  cc: number;      // controle de grupo 0–10
+  dashes: number;  // avanços/saltos 0–3
+  util: number;    // cura, escudo, visão, peel 0–10
+  early: number;   // força no início 0–10
+  mid: number;     // força no meio 0–10
+  late: number;    // força no fim 0–10
+  engage: number;  // capacidade de iniciar lutas 0–10
+  aoe: number;     // dano/controle em área 0–10
+}
+
+// Ajustes por kit (balanceáveis). Valores de 0 a 10.
+export const CURATED: Record<string, Curated> = {
+  Garen:       { cc: 3, dashes: 0, util: 1, early: 6, mid: 7, late: 5, engage: 3, aoe: 4 },
+  Darius:      { cc: 4, dashes: 0, util: 0, early: 9, mid: 7, late: 5, engage: 4, aoe: 5 },
+  Malphite:    { cc: 9, dashes: 1, util: 2, early: 4, mid: 7, late: 7, engage: 10, aoe: 9 },
+  Jax:         { cc: 4, dashes: 1, util: 0, early: 5, mid: 7, late: 9, engage: 5, aoe: 3 },
+  Camille:     { cc: 5, dashes: 2, util: 0, early: 5, mid: 7, late: 8, engage: 6, aoe: 2 },
+  Renekton:    { cc: 4, dashes: 2, util: 0, early: 9, mid: 7, late: 4, engage: 6, aoe: 4 },
+  Warwick:     { cc: 6, dashes: 1, util: 1, early: 8, mid: 7, late: 5, engage: 6, aoe: 3 },
+  Vi:          { cc: 7, dashes: 2, util: 0, early: 7, mid: 8, late: 5, engage: 8, aoe: 3 },
+  Amumu:       { cc: 9, dashes: 1, util: 2, early: 4, mid: 7, late: 7, engage: 9, aoe: 9 },
+  LeeSin:      { cc: 6, dashes: 3, util: 2, early: 9, mid: 7, late: 4, engage: 7, aoe: 4 },
+  XinZhao:     { cc: 5, dashes: 1, util: 0, early: 8, mid: 7, late: 4, engage: 7, aoe: 3 },
+  Sejuani:     { cc: 9, dashes: 1, util: 2, early: 6, mid: 8, late: 6, engage: 9, aoe: 7 },
+  Ahri:        { cc: 5, dashes: 3, util: 1, early: 6, mid: 8, late: 7, engage: 4, aoe: 5 },
+  Annie:       { cc: 8, dashes: 0, util: 2, early: 7, mid: 8, late: 6, engage: 7, aoe: 8 },
+  Lux:         { cc: 7, dashes: 0, util: 5, early: 6, mid: 7, late: 7, engage: 3, aoe: 7 },
+  Yasuo:       { cc: 6, dashes: 3, util: 3, early: 6, mid: 7, late: 8, engage: 5, aoe: 6 },
+  Zed:         { cc: 1, dashes: 3, util: 0, early: 7, mid: 9, late: 6, engage: 3, aoe: 3 },
+  Orianna:     { cc: 7, dashes: 0, util: 6, early: 5, mid: 7, late: 9, engage: 5, aoe: 9 },
+  Ashe:        { cc: 7, dashes: 0, util: 6, early: 5, mid: 7, late: 7, engage: 6, aoe: 4 },
+  Jinx:        { cc: 3, dashes: 0, util: 1, early: 4, mid: 6, late: 10, engage: 1, aoe: 6 },
+  Caitlyn:     { cc: 3, dashes: 1, util: 3, early: 8, mid: 7, late: 7, engage: 1, aoe: 2 },
+  MissFortune: { cc: 2, dashes: 0, util: 1, early: 7, mid: 8, late: 6, engage: 2, aoe: 9 },
+  Kaisa:       { cc: 1, dashes: 2, util: 0, early: 4, mid: 7, late: 10, engage: 3, aoe: 3 },
+  Jhin:        { cc: 4, dashes: 0, util: 3, early: 7, mid: 8, late: 6, engage: 1, aoe: 4 },
+  Soraka:      { cc: 4, dashes: 0, util: 10, early: 5, mid: 7, late: 8, engage: 1, aoe: 3 },
+  Leona:       { cc: 10, dashes: 1, util: 4, early: 8, mid: 7, late: 5, engage: 10, aoe: 6 },
+  Nautilus:    { cc: 10, dashes: 1, util: 4, early: 7, mid: 7, late: 6, engage: 9, aoe: 6 },
+  Lulu:        { cc: 6, dashes: 0, util: 10, early: 6, mid: 7, late: 8, engage: 2, aoe: 3 },
+  Morgana:     { cc: 8, dashes: 0, util: 7, early: 6, mid: 7, late: 6, engage: 4, aoe: 6 },
+  Thresh:      { cc: 9, dashes: 1, util: 9, early: 7, mid: 7, late: 7, engage: 8, aoe: 4 },
+};
+
+const DEFAULT_CURATED: Curated = { cc: 5, dashes: 1, util: 3, early: 6, mid: 7, late: 6, engage: 4, aoe: 4 };
+
+const CLASS_BY_TAG: Record<string, ChampClass> = {
+  Tank: 'tanque', Fighter: 'lutador', Assassin: 'assassino', Mage: 'mago', Marksman: 'atirador', Support: 'encantador',
+};
+export const CLASS_LABEL: Record<ChampClass, string> = {
+  tanque: 'Tanque', lutador: 'Lutador', assassino: 'Assassino', mago: 'Mago', atirador: 'Atirador', encantador: 'Suporte',
+};
+
+export interface ChampionCard {
+  id: string;
+  name: string;
+  title: string;
+  champClass: ChampClass;
+  tags: string[];
+  attrs: { ATQ: number; MAG: number; DEF: number; MOB: number; CTR: number; UTL: number };
+  curve: { early: number; mid: number; late: number }; // 0–10
+  engage: number;
+  aoe: number;
+  ranged: boolean;
+  difficulty: number;
+  ovr: Record<Role, number>; // overall em cada rota (penalidade fora das rotas permitidas)
+  bestOvr: number;
+  patch: string;
+}
+
+type DD = { version: string; champions: Record<string, { name: string; title: string; tags: string[]; info: { attack: number; defense: number; magic: number; difficulty: number }; stats: { hp: number; armor: number; mr: number; moveSpeed: number; range: number } }> };
+const DATA = ddragon as DD;
+
+const clamp = (v: number, lo = 40, hi = 99) => Math.max(lo, Math.min(hi, Math.round(v)));
+const scale10 = (v: number) => 40 + (v / 10) * 59; // 0–10 → 40–99
+const norm = (v: number, lo: number, hi: number) => Math.max(0, Math.min(10, ((v - lo) / (hi - lo)) * 10));
+
+// Peso de cada atributo por rota (soma 1). "fase" = a fase do jogo mais importante na rota.
+const ROLE_WEIGHTS: Record<Role, { dmg: number; DEF: number; MOB: number; CTR: number; UTL: number; phase: number; phaseKey: 'early' | 'mid' | 'late' }> = {
+  TOP:     { dmg: 0.25, DEF: 0.25, MOB: 0.12, CTR: 0.1, UTL: 0.03, phase: 0.25, phaseKey: 'early' },
+  JUNGLE:  { dmg: 0.2, DEF: 0.15, MOB: 0.2, CTR: 0.2, UTL: 0.05, phase: 0.2, phaseKey: 'early' },
+  MID:     { dmg: 0.35, DEF: 0.05, MOB: 0.15, CTR: 0.15, UTL: 0.05, phase: 0.25, phaseKey: 'mid' },
+  ADC:     { dmg: 0.4, DEF: 0.05, MOB: 0.1, CTR: 0.05, UTL: 0.05, phase: 0.35, phaseKey: 'late' },
+  SUPORTE: { dmg: 0.05, DEF: 0.2, MOB: 0.05, CTR: 0.3, UTL: 0.3, phase: 0.1, phaseKey: 'early' },
+};
+
+export function buildCard(id: string, routes: Role[]): ChampionCard {
+  const d = DATA.champions[id];
+  if (!d) throw new Error(`Campeão ${id} não está no Data Dragon.`);
+  const c = CURATED[id] ?? DEFAULT_CURATED;
+  const durability = norm(d.stats.hp * (1 + (d.stats.armor + d.stats.mr) / 100), 900, 1250);
+  const speed = norm(d.stats.moveSpeed, 320, 350);
+
+  const attrs = {
+    ATQ: clamp(scale10(d.info.attack)),
+    MAG: clamp(scale10(d.info.magic)),
+    DEF: clamp(scale10(0.65 * d.info.defense + 0.35 * durability)),
+    MOB: clamp(scale10(0.4 * speed + 0.6 * (c.dashes / 3) * 10)),
+    CTR: clamp(scale10(c.cc)),
+    UTL: clamp(scale10(c.util)),
+  };
+  const curve = { early: c.early, mid: c.mid, late: c.late };
+  const dmg = Math.max(attrs.ATQ, attrs.MAG);
+
+  const ovr = {} as Record<Role, number>;
+  for (const role of Object.keys(ROLE_WEIGHTS) as Role[]) {
+    const w = ROLE_WEIGHTS[role];
+    const score = w.dmg * dmg + w.DEF * attrs.DEF + w.MOB * attrs.MOB + w.CTR * attrs.CTR + w.UTL * attrs.UTL
+      + w.phase * scale10(curve[w.phaseKey]);
+    // 40–99 → faixa de "overall" estilo FIFA (~60–95)
+    let o = 52 + (score - 40) * 0.72;
+    const idx = routes.indexOf(role);
+    if (idx === -1) o -= 14;       // fora das rotas do campeão
+    else if (idx === 1) o -= 3;    // rota secundária
+    else if (idx >= 2) o -= 6;     // terciária
+    ovr[role] = clamp(o, 45, 99);
+  }
+
+  return {
+    id, name: d.name, title: d.title,
+    champClass: CLASS_BY_TAG[d.tags[0]] ?? 'lutador',
+    tags: d.tags, attrs, curve, engage: c.engage, aoe: c.aoe,
+    ranged: d.stats.range >= 300, difficulty: d.info.difficulty,
+    ovr, bestOvr: Math.max(...Object.values(ovr)), patch: DATA.version,
+  };
+}
+
+export function cardTier(ovr: number): 'icone' | 'ouro' | 'prata' | 'bronze' {
+  if (ovr >= 88) return 'icone';
+  if (ovr >= 80) return 'ouro';
+  if (ovr >= 72) return 'prata';
+  return 'bronze';
+}
