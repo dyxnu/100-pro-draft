@@ -29,6 +29,7 @@ function parseAction(body: unknown): ClientAction | null {
   if (!body || typeof body !== 'object') return null;
   const b = body as Record<string, unknown>;
   if (b.type === 'tick') return { type: 'tick' };
+  if (b.type === 'pass') return { type: 'pass' };
   if (b.type === 'bid' && Number.isInteger(b.amount) && (b.amount as number) > 0 && (b.amount as number) <= 100_00)
     return { type: 'bid', amount: b.amount as number };
   if (b.type === 'route' && typeof b.role === 'string' && (ROLES as readonly string[]).includes(b.role))

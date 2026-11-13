@@ -5,8 +5,8 @@ import { buildCard } from './cards';
 describe('cartas dos campeões', () => {
   const cards = STARTER_CHAMPIONS.map(c => buildCard(c.id, c.routes));
 
-  it('gera todas as 30 cartas com atributos no intervalo', () => {
-    expect(cards).toHaveLength(30);
+  it('gera todas as cartas do catálogo com atributos no intervalo', () => {
+    expect(cards).toHaveLength(STARTER_CHAMPIONS.length);
     for (const card of cards) {
       for (const v of Object.values(card.attrs)) {
         expect(v).toBeGreaterThanOrEqual(40);
@@ -15,10 +15,14 @@ describe('cartas dos campeões', () => {
     }
   });
 
-  it('rota principal tem o melhor overall', () => {
+  it('melhor overall é numa rota do campeão; fora das rotas vale metade', () => {
     for (const c of STARTER_CHAMPIONS) {
       const card = buildCard(c.id, c.routes);
-      expect(card.ovr[c.routes[0]]).toBe(card.bestOvr);
+      const inRole = Math.max(...c.routes.map(r => card.ovr[r]));
+      expect(inRole).toBe(card.bestOvr);
+      for (const [role, v] of Object.entries(card.ovr)) {
+        if (!c.routes.includes(role as never)) expect(v).toBe(Math.round(inRole / 2));
+      }
     }
   });
 

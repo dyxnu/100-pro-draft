@@ -51,6 +51,10 @@
   .btn-bid small { font-weight: 500; color: var(--color-muted); font-size: 11px; }
   .btn-bid:hover:not(:disabled) { border-color: var(--color-gold); background: #1f2a3b; }
   .btn-bid:disabled { opacity: .35; cursor: not-allowed; }
+  .btn-bid.allin { border-color: var(--color-gold); }
+  .btn-pass { border: 1px solid var(--color-line); border-radius: 8px; padding: 9px 14px; color: var(--color-muted); white-space: nowrap; }
+  .btn-pass:hover:not(:disabled) { color: var(--color-text); border-color: var(--color-muted); }
+  .btn-pass:disabled { opacity: .45; cursor: not-allowed; }
   .custom { display: flex; gap: 8px; align-items: center; }
   .custom .prefix { color: var(--color-muted); }
   .custom input { flex: 1; min-width: 0; background: var(--color-bg2); border: 1px solid var(--color-line); border-radius: 8px; padding: 9px 10px; outline: none; }

@@ -52,6 +52,16 @@ export const CURATED: Record<string, Curated> = {
   Lulu:        { cc: 6, dashes: 0, util: 10, early: 6, mid: 7, late: 8, engage: 2, aoe: 3 },
   Morgana:     { cc: 8, dashes: 0, util: 7, early: 6, mid: 7, late: 6, engage: 4, aoe: 6 },
   Thresh:      { cc: 9, dashes: 1, util: 9, early: 7, mid: 7, late: 7, engage: 8, aoe: 4 },
+  Fiora:       { cc: 2, dashes: 2, util: 0, early: 6, mid: 8, late: 9, engage: 3, aoe: 1 },
+  Sett:        { cc: 6, dashes: 1, util: 1, early: 8, mid: 7, late: 5, engage: 7, aoe: 5 },
+  Graves:      { cc: 2, dashes: 2, util: 0, early: 8, mid: 8, late: 6, engage: 3, aoe: 4 },
+  Ekko:        { cc: 5, dashes: 2, util: 2, early: 6, mid: 8, late: 7, engage: 5, aoe: 5 },
+  Syndra:      { cc: 7, dashes: 0, util: 1, early: 6, mid: 9, late: 7, engage: 4, aoe: 6 },
+  Katarina:    { cc: 0, dashes: 3, util: 0, early: 5, mid: 9, late: 7, engage: 4, aoe: 8 },
+  Ezreal:      { cc: 1, dashes: 2, util: 2, early: 6, mid: 8, late: 7, engage: 1, aoe: 2 },
+  Vayne:       { cc: 4, dashes: 2, util: 0, early: 3, mid: 6, late: 10, engage: 1, aoe: 1 },
+  Nami:        { cc: 8, dashes: 0, util: 9, early: 7, mid: 7, late: 7, engage: 5, aoe: 5 },
+  Blitzcrank:  { cc: 8, dashes: 0, util: 5, early: 8, mid: 6, late: 5, engage: 8, aoe: 2 },
 };
 
 const DEFAULT_CURATED: Curated = { cc: 5, dashes: 1, util: 3, early: 6, mid: 7, late: 6, engage: 4, aoe: 4 };
@@ -101,11 +111,13 @@ export function buildCard(id: string, routes: Role[]): ChampionCard {
     // 40–99 → faixa de "overall" estilo FIFA (~60–95)
     let o = 52 + (score - 40) * 0.72;
     const idx = routes.indexOf(role);
-    if (idx === -1) o -= 14;       // fora das rotas do campeão
-    else if (idx === 1) o -= 3;    // rota secundária
+    if (idx === 1) o -= 3;         // rota secundária
     else if (idx >= 2) o -= 6;     // terciária
-    ovr[role] = clamp(o, 45, 99);
+    ovr[role] = clamp(o, 20, 99);
   }
+  // Fora das rotas do campeão vale metade da nota (regra do 100pracada).
+  const inRole = Math.max(...routes.map(r => ovr[r]));
+  for (const role of Object.keys(ovr) as Role[]) if (!routes.includes(role)) ovr[role] = Math.round(inRole / 2);
 
   return {
     id, name: d.name, title: d.title,

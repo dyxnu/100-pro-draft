@@ -122,7 +122,7 @@ export function AuctionView({ code, roomId, initialState, initialNextTickAt, ser
             ) : (
               <div className="timer"><span>Próximo campeão…</span></div>
             )}
-            {me && <BidControls s={s} me={me} pending={pending} act={act} custom={custom} setCustom={setCustom} />}
+            {me && s.current && <BidControls key={s.current.champId} s={s} me={me} pending={pending} act={act} custom={custom} setCustom={setCustom} />}
           </div>
         </section>
 
@@ -153,7 +153,7 @@ function StageHeader({ s, me, lastPlaced }: {
 
   let tag: React.ReactNode = '', amount = '—', leader: React.ReactNode = '';
   if (cur) {
-    tag = <>Em disputa{cur.attempt > 1 && <span className="warn"> · 2ª tentativa, sem lances será sorteado</span>}</>;
+    tag = <>Campeão {cur.index} de {s.totalLots}{cur.passes.length > 0 && <span className="warn"> · {cur.passes.length} passaram</span>}</>;
     if (cur.highBid) {
       amount = fmt(cur.highBid.amount);
       leader = <>liderando: <b style={{ color: seatColor(cur.highBid.playerId) }}>{name(cur.highBid.playerId)}</b> · {cur.bidCount} lance{cur.bidCount > 1 ? 's' : ''}</>;
@@ -162,11 +162,11 @@ function StageHeader({ s, me, lastPlaced }: {
       leader = 'Nenhum lance ainda. Esse é o lance inicial.';
     }
   } else if (rp) {
-    tag = rp.how === 'leilao' ? 'Arrematado' : rp.how === 'sorteio' ? 'Sorteado' : 'Atribuído';
+    tag = 'Arrematado';
     amount = fmt(rp.price);
     leader = <><b style={{ color: seatColor(rp.playerId) }}>{name(rp.playerId)}</b> está escolhendo a rota…</>;
   } else if (lastPlaced) {
-    tag = lastPlaced.how === 'leilao' ? 'Vendido' : lastPlaced.how === 'sorteio' ? 'Sorteado (grátis)' : 'Sobra (grátis)';
+    tag = lastPlaced.via === 'sobra' ? 'Sobra (grátis)' : 'Vendido';
     amount = fmt(lastPlaced.price);
     leader = <><b style={{ color: seatColor(lastPlaced.playerId) }}>{name(lastPlaced.playerId)}</b> · {ROLE_LABEL[lastPlaced.role]}</>;
   }
@@ -208,46 +208,66 @@ function BidControls({ s, me, pending, act, custom, setCustom }: {
   s: AuctionState; me: string; pending: boolean; act: (a: ClientAction) => void;
   custom: string; setCustom: (v: string) => void;
 }) {
-  const cur = s.current;
-  if (!cur) return null;
+  const cur = s.current!; // só é renderizado com um lote em disputa
   const el = bidEligibility(s, me);
   const leading = cur.highBid?.playerId === me;
   const min = minNextBid(s);
   const max = maxBid(s, me);
   const base = cur.highBid?.amount ?? 0;
   const can = el.ok && !leading && !pending;
+  const passed = cur.passes.includes(me);
   const reserve = (openRoles(getPlayer(s, me)!).length - 1) * s.config.minBid;
+  const unit = s.config.minIncrement;
+  const quick = [1, 5, 10].map((n, i) => ({ key: String(i + 1), label: `+${n}`, amount: Math.max(min, base + n * unit) }));
 
   const submitCustom = () => {
-    const v = Math.round(parseFloat(custom.replace(/[^\d,.]/g, '').replace(',', '.')) * 100);
+    const v = Math.round(parseFloat(custom.replace(/[^\d,.]/g, '').replace(',', '.'))) * 100;
     if (Number.isFinite(v)) { act({ type: 'bid', amount: v }); setCustom(''); }
   };
+
+  // Atalhos de teclado: 1/2/3 = +1/+5/+10, T = tudo, P = passar
+  const latest = useRef({ can, max, min, quick, passed, leading });
+  latest.current = { can, max, min, quick, passed, leading };
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if ((e.target as HTMLElement)?.tagName === 'INPUT' || e.ctrlKey || e.metaKey || e.altKey) return;
+      const st = latest.current;
+      const q = st.quick.find(x => x.key === e.key);
+      if (q && st.can && q.amount <= st.max) act({ type: 'bid', amount: q.amount });
+      else if (e.key.toLowerCase() === 't' && st.can && st.max >= st.min) act({ type: 'bid', amount: st.max });
+      else if (e.key.toLowerCase() === 'p' && !st.passed && !st.leading) act({ type: 'pass' });
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [act]);
 
   return (
     <>
       <div className="quick">
-        {[50, 100, 500, 1000].map(inc => {
-          const amt = Math.max(min, base + inc);
-          return (
-            <button key={inc} className="btn-bid" disabled={!can || amt > max} onClick={() => act({ type: 'bid', amount: amt })}>
-              {fmt(amt)}<small>+{fmt(inc).replace('R$ ', '')}</small>
-            </button>
-          );
-        })}
+        {quick.map(q => (
+          <button key={q.key} className="btn-bid" disabled={!can || q.amount > max} onClick={() => act({ type: 'bid', amount: q.amount })}>
+            {q.label}<small>{fmt(q.amount)} · tecla {q.key}</small>
+          </button>
+        ))}
+        <button className="btn-bid allin" disabled={!can || max < min} onClick={() => act({ type: 'bid', amount: max })}>
+          Tudo<small>{fmt(max)} · tecla T</small>
+        </button>
       </div>
       <div className="custom">
         <span className="prefix">R$</span>
         <input
-          value={custom} onChange={e => setCustom(e.target.value)} inputMode="decimal" placeholder="0,00"
+          value={custom} onChange={e => setCustom(e.target.value)} inputMode="numeric" placeholder="valor"
           disabled={!can} onKeyDown={e => { if (e.key === 'Enter') submitCustom(); }}
         />
         <button className="btn-secondary" disabled={!can} onClick={submitCustom}>Dar lance</button>
-        <button className="btn-secondary" disabled={!can || max < min} onClick={() => act({ type: 'bid', amount: max })}>Máx</button>
+        <button className="btn-pass" disabled={passed || leading || pending || !el.ok && !passed && el.reason.startsWith('Nenhum')} onClick={() => act({ type: 'pass' })}>
+          {passed ? 'Passou' : 'Passar (P)'}
+        </button>
       </div>
       <div className={`hint ${leading ? 'lead' : !el.ok ? 'bad' : ''}`}>
-        {leading ? 'Você está liderando! Se ninguém cobrir, o campeão é seu.'
+        {leading ? 'O maior lance é seu. Se ninguém cobrir, ele é seu.'
           : !el.ok ? el.reason
-          : `Seu lance máximo agora: ${fmt(max)} (guardando ${fmt(reserve)} para as outras vagas).`}
+          : `Você pode ir até ${fmt(max)} (guardando ${fmt(reserve)} para as outras vagas). Lance no fim garante ${s.config.bidExtendMs / 1000} s no relógio.`}
       </div>
     </>
   );
@@ -353,14 +373,15 @@ function Log({ s }: { s: AuctionState }) {
   const cn = (id: string) => <b>{s.champions[id]?.name}</b>;
   const text = (e: AuctionEvent): React.ReactNode => {
     switch (e.type) {
-      case 'lot_start': return <>Em disputa: {cn(e.champId)}{e.attempt > 1 ? ' (2ª tentativa)' : ''}</>;
+      case 'lot_start': return <>Campeão {e.index}: {cn(e.champId)}</>;
       case 'bid': return <>{who(e.playerId)} deu {fmt(e.amount)} em {cn(e.champId)}</>;
+      case 'pass': return <>{who(e.playerId)} passou</>;
       case 'sold': return <>{cn(e.champId)} arrematado por {who(e.playerId)} por <b>{fmt(e.amount)}</b></>;
-      case 'requeue': return <>{cn(e.champId)} ficou sem lances e voltou para o fim da fila</>;
-      case 'forced': return <>{cn(e.champId)} ficou sem lances de novo e foi sorteado para {who(e.playerId)} (grátis)</>;
-      case 'only_option': return <>{cn(e.champId)} só cabe no time de {who(e.playerId)}, que recebe de graça</>;
+      case 'unsold': return <>{cn(e.champId)} ficou sem lances: passou, passou</>;
       case 'route_pick': return <>{who(e.playerId)} está escolhendo a rota de {cn(e.champId)}</>;
-      case 'placed': return <>{who(e.playerId)} colocou {cn(e.champId)} no <b>{ROLE_LABEL[e.role]}</b>{e.via === 'auto' ? ' (automático)' : ''}</>;
+      case 'placed': return e.via === 'sobra'
+        ? <>{who(e.playerId)} completa o {ROLE_LABEL[e.role]} de graça com {cn(e.champId)}{e.offRole ? ' (fora da rota: vale metade)' : ''}</>
+        : <>{who(e.playerId)} colocou {cn(e.champId)} no <b>{ROLE_LABEL[e.role]}</b>{e.via === 'auto' ? ' (automático)' : ''}</>;
       case 'finished': return <b>Draft encerrado!</b>;
     }
   };
@@ -370,7 +391,7 @@ function Log({ s }: { s: AuctionState }) {
       <h3>Histórico</h3>
       <ol>
         {evs.map((e, i) => (
-          <li key={s.events.length - i} className={['sold', 'forced', 'only_option', 'finished'].includes(e.type) ? 'big' : ''}>{text(e)}</li>
+          <li key={s.events.length - i} className={['sold', 'finished'].includes(e.type) ? 'big' : ''}>{text(e)}</li>
         ))}
       </ol>
     </section>

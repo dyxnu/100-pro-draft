@@ -38,6 +38,7 @@ export interface AuctionRow {
 /** O que o navegador pode pedir. Tudo é validado no servidor. */
 export type ClientAction =
   | { type: 'bid'; amount: number }
+  | { type: 'pass' }
   | { type: 'route'; role: Role }
   | { type: 'tick' };
 

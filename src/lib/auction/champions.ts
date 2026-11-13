@@ -32,4 +32,15 @@ export const STARTER_CHAMPIONS: Champion[] = [
   { id: 'Lulu', name: 'Lulu', routes: ['SUPORTE', 'MID'], tier: 2 },
   { id: 'Morgana', name: 'Morgana', routes: ['SUPORTE', 'MID', 'JUNGLE'], tier: 2 },
   { id: 'Thresh', name: 'Thresh', routes: ['SUPORTE'], tier: 3 },
+  // Expansão (mais lotes que vagas)
+  { id: 'Fiora', name: 'Fiora', routes: ['TOP'], tier: 3 },
+  { id: 'Sett', name: 'Sett', routes: ['TOP', 'SUPORTE'], tier: 2 },
+  { id: 'Graves', name: 'Graves', routes: ['JUNGLE', 'TOP'], tier: 2 },
+  { id: 'Ekko', name: 'Ekko', routes: ['JUNGLE', 'MID'], tier: 3 },
+  { id: 'Syndra', name: 'Syndra', routes: ['MID'], tier: 2 },
+  { id: 'Katarina', name: 'Katarina', routes: ['MID'], tier: 3 },
+  { id: 'Ezreal', name: 'Ezreal', routes: ['ADC'], tier: 3 },
+  { id: 'Vayne', name: 'Vayne', routes: ['ADC', 'TOP'], tier: 3 },
+  { id: 'Nami', name: 'Nami', routes: ['SUPORTE'], tier: 2 },
+  { id: 'Blitzcrank', name: 'Blitzcrank', routes: ['SUPORTE'], tier: 2 },
 ];

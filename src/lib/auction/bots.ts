@@ -2,7 +2,7 @@
 // O "cérebro" também é serializável, para poder ser salvo junto com o estado da sala.
 import {
   ROLES, type AuctionState, type BotProfile, type Player, type Role,
-  bidEligibility, chooseRoute, maxBid, minNextBid, nextRandom, openRoles, placeBid,
+  bidEligibility, chooseRoute, maxBid, minNextBid, nextRandom, openRoles, passLot, placeBid,
 } from './engine';
 
 export const BOT_PROFILES: Record<BotProfile, { label: string; mult: number; jump: number; prefMult?: number }> = {
@@ -42,7 +42,8 @@ function valuation(s: AuctionState, p: Player, brain: BotBrain): number {
   let mult = prof.mult;
   if (prof.prefMult && champ.routes.includes(brain.prefRole) && !p.roster[brain.prefRole]) mult = prof.prefMult;
   const v = avgPerSlot * mult * TIER_FACTOR[champ.tier] * brain.noise;
-  return Math.min(Math.floor(v / 50) * 50, maxBid(s, p.id));
+  const unit = s.config.minIncrement;
+  return Math.min(Math.floor(v / unit) * unit, maxBid(s, p.id));
 }
 
 export function stepBots(s: AuctionState, brains: BotBrains, now: number): void {
@@ -72,7 +73,9 @@ export function stepBots(s: AuctionState, brains: BotBrains, now: number): void 
     if (b.lotKey !== key) { b.lotKey = key; b.noise = 0.8 + rand() * 0.4; b.seen = -1; }
     if (b.seen !== s.seq) {
       b.seen = s.seq;
-      b.nextAt = now + 350 + rand() * s.config.bidTimeMs * 0.75;
+      // Reage em um momento aleatório antes do relógio acabar.
+      const window = Math.max(600, Math.min(s.config.bidTimeMs, s.current.endsAt - now) * 0.8);
+      b.nextAt = now + 300 + rand() * window;
     }
     if (b.nextAt == null || now < b.nextAt) continue;
     b.nextAt = null;
@@ -81,10 +84,11 @@ export function stepBots(s: AuctionState, brains: BotBrains, now: number): void 
     if (!bidEligibility(s, p.id).ok) continue;
     const v = valuation(s, p, b);
     const min = minNextBid(s);
-    if (min > v) continue;
+    if (min > v) { passLot(s, p.id, now); continue; } // passou do que ele aceita pagar
     const prof = BOT_PROFILES[p.botProfile ?? 'equilibrado'];
     const frac = 0.2 + rand() * 0.3 + (rand() < prof.jump ? 0.25 : 0);
-    placeBid(s, p.id, min + Math.floor(((v - min) * frac) / 50) * 50, now);
+    const unit = s.config.minIncrement;
+    placeBid(s, p.id, min + Math.floor(((v - min) * frac) / unit) * unit, now);
   }
 }
 

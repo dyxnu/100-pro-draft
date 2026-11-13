@@ -1,6 +1,15 @@
-// NEXUS DRAFT: motor do leilão (autoritativo).
+// NEXUS DRAFT: motor do leilão (autoritativo), regras v2 (inspiradas no 100pracada).
 // Funções puras sobre um estado 100% serializável (JSON). Roda no servidor; o cliente
-// só envia intenções (placeBid / chooseRoute). Valores em CENTAVOS.
+// só envia intenções (placeBid / passLot / chooseRoute). Valores em CENTAVOS.
+//
+// Regras:
+// - R$ 100 por jogador; lances em reais inteiros (+1, +5, +10, Tudo). Guardar R$ 1 por vaga vazia.
+// - Cada lote dura 10 s; todo lance garante pelo menos 3 s no relógio.
+// - Há mais lotes que vagas (ex.: 6 por jogador para times de 5), equilibrados por rota.
+//   Cada campeão aparece uma vez só: passou, passou.
+// - "Passar" tira o jogador daquele lote; se todos que podem dar lance passarem, o lote fecha.
+// - O leilão acaba quando todos completam o time (ou os lotes acabam). Vagas que sobrarem são
+//   preenchidas de graça com campeões não vendidos; fora da rota, o campeão rende metade.
 
 export const ROLES = ['TOP', 'JUNGLE', 'MID', 'ADC', 'SUPORTE'] as const;
 export type Role = (typeof ROLES)[number];
@@ -14,32 +23,32 @@ export interface Champion {
 
 export interface AuctionConfig {
   budget: number;
-  minBid: number;
+  minBid: number;        // lance inicial e reserva por vaga
   minIncrement: number;
-  bidTimeMs: number;
+  bidTimeMs: number;     // duração inicial do lote
+  bidExtendMs: number;   // todo lance garante pelo menos isso no relógio
   routePickMs: number;
   intermissionMs: number;
-  maxNoBidAttempts: number;
   teamSize: number;
-  autoAssignSingleBidder: boolean;
+  lotsPerPlayer: number;
 }
 
 export const DEFAULT_CONFIG: AuctionConfig = {
   budget: 10000,
-  minBid: 50,
-  minIncrement: 50,
+  minBid: 100,
+  minIncrement: 100,
   bidTimeMs: 10000,
+  bidExtendMs: 3000,
   routePickMs: 10000,
-  intermissionMs: 1500,
-  maxNoBidAttempts: 2,
+  intermissionMs: 1200,
   teamSize: 5,
-  autoAssignSingleBidder: true,
+  lotsPerPlayer: 6,
 };
 
 export type BotProfile = 'economico' | 'equilibrado' | 'agressivo' | 'estrategico';
-export type AcquiredHow = 'leilao' | 'sorteio' | 'unico';
+export type AcquiredHow = 'leilao' | 'sobra';
 
-export interface RosterSlot { champId: string; price: number; how: AcquiredHow }
+export interface RosterSlot { champId: string; price: number; how: AcquiredHow; offRole: boolean }
 
 export interface Player {
   id: string;
@@ -54,33 +63,32 @@ export interface Bid { seq: number; champId: string; playerId: string; amount: n
 
 export interface Lot {
   champId: string;
+  index: number;          // número do lote (1..total)
   highBid: Bid | null;
   bidCount: number;
+  passes: string[];
   startedAt: number;
   endsAt: number;
-  attempt: number;
 }
 
 export interface RoutePick {
   playerId: string;
   champId: string;
   price: number;
-  how: AcquiredHow;
   options: Role[];
   deadline: number;
 }
 
-export interface Sale { champId: string; playerId: string; price: number; role: Role; how: AcquiredHow; at: number }
+export interface Sale { champId: string; playerId: string; price: number; role: Role; how: AcquiredHow; offRole: boolean; at: number }
 
 export type AuctionEvent =
-  | { type: 'lot_start'; champId: string; attempt: number; at: number }
+  | { type: 'lot_start'; champId: string; index: number; at: number }
   | { type: 'bid'; champId: string; playerId: string; amount: number; at: number }
+  | { type: 'pass'; champId: string; playerId: string; at: number }
   | { type: 'sold'; champId: string; playerId: string; amount: number; at: number }
-  | { type: 'requeue'; champId: string; at: number }
-  | { type: 'forced'; champId: string; playerId: string; at: number }
-  | { type: 'only_option'; champId: string; playerId: string; at: number }
+  | { type: 'unsold'; champId: string; at: number }
   | { type: 'route_pick'; champId: string; playerId: string; options: Role[]; at: number }
-  | { type: 'placed'; champId: string; playerId: string; role: Role; via: 'escolha' | 'auto' | 'unica'; price: number; how: AcquiredHow; at: number }
+  | { type: 'placed'; champId: string; playerId: string; role: Role; via: 'escolha' | 'auto' | 'unica' | 'sobra'; price: number; offRole: boolean; at: number }
   | { type: 'finished'; at: number };
 
 export type Phase = 'bidding' | 'routePick' | 'finished';
@@ -91,7 +99,8 @@ export interface AuctionState {
   champions: Record<string, Champion>;
   players: Player[];
   queue: string[];
-  attempts: Record<string, number>;
+  totalLots: number;
+  leftovers: string[];
   current: Lot | null;
   routePick: RoutePick | null;
   phase: Phase;
@@ -124,72 +133,28 @@ export function shuffle<T>(arr: readonly T[], rand: () => number): T[] {
 }
 
 export function formatBRL(cents: number): string {
-  return 'R$ ' + (cents / 100).toFixed(2).replace('.', ',');
+  return cents % 100 === 0 ? `R$ ${cents / 100}` : 'R$ ' + (cents / 100).toFixed(2).replace('.', ',');
 }
 
 // ---------- consultas ----------
 export const getPlayer = (s: AuctionState, id: string) => s.players.find(p => p.id === id);
 export const openRoles = (p: Player): Role[] => ROLES.filter(r => !p.roster[r]);
+const allFull = (s: AuctionState) => s.players.every(p => openRoles(p).length === 0);
 
 function emit(s: AuctionState, event: AuctionEvent) {
   s.events.push(event);
   s.version++;
 }
 
-function unplacedChampIds(s: AuctionState): string[] {
-  const ids = s.queue.slice();
-  if (s.current) ids.push(s.current.champId);
-  if (s.routePick) ids.push(s.routePick.champId);
-  return ids;
-}
-
-interface Slot { playerId: string; role: Role }
-
-function openSlots(s: AuctionState): Slot[] {
-  const out: Slot[] = [];
-  s.players.forEach(p => openRoles(p).forEach(role => out.push({ playerId: p.id, role })));
-  return out;
-}
-
-/** Existe um jeito de preencher todas as vagas com os campeões restantes? (emparelhamento bipartido, Kuhn) */
-export function canFillAllSlots(champIds: string[], slots: Slot[], champions: Record<string, Champion>): boolean {
-  if (champIds.length < slots.length) return false;
-  const adj = slots.map(sl =>
-    champIds.map((cid, i) => (champions[cid].routes.includes(sl.role) ? i : -1)).filter(i => i >= 0),
-  );
-  const champMatch = new Array<number>(champIds.length).fill(-1);
-  const tryAugment = (u: number, seen: boolean[]): boolean => {
-    for (const v of adj[u]) {
-      if (seen[v]) continue;
-      seen[v] = true;
-      if (champMatch[v] === -1 || tryAugment(champMatch[v], seen)) {
-        champMatch[v] = u;
-        return true;
-      }
-    }
-    return false;
-  };
-  for (let u = 0; u < slots.length; u++) {
-    if (!tryAugment(u, new Array<boolean>(champIds.length).fill(false))) return false;
-  }
-  return true;
-}
-
-/** Rotas em que o jogador pode colocar o campeão sem inviabilizar o draft de ninguém. */
+/** Rotas livres do jogador em que o campeão pode jogar. */
 export function validRoles(s: AuctionState, playerId: string, champId: string): Role[] {
   const p = getPlayer(s, playerId);
   const champ = s.champions[champId];
   if (!p || !champ) return [];
-  const pool = unplacedChampIds(s).filter(id => id !== champId);
-  const slots = openSlots(s);
-  return champ.routes.filter(role => {
-    if (p.roster[role]) return false;
-    const rest = slots.filter(sl => !(sl.playerId === playerId && sl.role === role));
-    return canFillAllSlots(pool, rest, s.champions);
-  });
+  return champ.routes.filter(r => !p.roster[r]);
 }
 
-/** Lance máximo = saldo − (vagas restantes − 1) × lance mínimo */
+/** Lance máximo = saldo − R$ 1 para cada outra vaga vazia. */
 export function maxBid(s: AuctionState, playerId: string): number {
   const p = getPlayer(s, playerId);
   if (!p) return 0;
@@ -207,8 +172,8 @@ export function bidEligibility(s: AuctionState, playerId: string): Result {
   const p = getPlayer(s, playerId);
   if (!p) return { ok: false, reason: 'Jogador inválido.' };
   if (!openRoles(p).length) return { ok: false, reason: 'Seu time já está completo.' };
-  if (!validRoles(s, playerId, s.current.champId).length)
-    return { ok: false, reason: 'Você não tem rota livre para este campeão.' };
+  if (!validRoles(s, playerId, s.current.champId).length) return { ok: false, reason: 'Você não tem rota livre para este campeão.' };
+  if (s.current.passes.includes(playerId)) return { ok: false, reason: 'Você passou neste campeão.' };
   if (maxBid(s, playerId) < minNextBid(s)) return { ok: false, reason: 'Saldo insuficiente para cobrir.' };
   return { ok: true };
 }
@@ -224,8 +189,9 @@ export interface CreateGameInput {
 
 export function createGame(input: CreateGameInput): AuctionState {
   const config: AuctionConfig = { ...DEFAULT_CONFIG, ...input.config };
-  if (input.champions.length !== input.players.length * config.teamSize) {
-    throw new Error(`Precisa de exatamente ${input.players.length * config.teamSize} campeões para ${input.players.length} jogadores.`);
+  const slots = input.players.length * config.teamSize;
+  if (input.champions.length < slots) {
+    throw new Error(`Precisa de pelo menos ${slots} campeões para ${input.players.length} jogadores.`);
   }
   const champions: Record<string, Champion> = {};
   input.champions.forEach(c => { champions[c.id] = c; });
@@ -239,20 +205,25 @@ export function createGame(input: CreateGameInput): AuctionState {
       id: p.id, name: p.name, isBot: !!p.isBot, botProfile: p.botProfile ?? null,
       budget: config.budget, roster: emptyRoster(),
     })),
-    queue: [],
-    attempts: {},
-    current: null,
-    routePick: null,
-    phase: 'bidding',
-    intermissionUntil: input.now,
-    sales: [], bids: [], events: [],
-    seq: 0, version: 0,
+    queue: [], totalLots: 0, leftovers: [],
+    current: null, routePick: null, phase: 'bidding', intermissionUntil: input.now,
+    sales: [], bids: [], events: [], seq: 0, version: 0,
   };
-  s.queue = shuffle(Object.keys(champions), () => nextRandom(s));
-  if (!canFillAllSlots(Object.keys(champions), openSlots(s), champions)) {
-    throw new Error('Catálogo inválido: as rotas não permitem montar todos os times.');
-  }
+  s.queue = pickLots(s, Math.min(input.champions.length, input.players.length * config.lotsPerPlayer));
+  s.totalLots = s.queue.length;
   return s;
+}
+
+/** Sorteia os lotes com equilíbrio entre as rotas (pela rota principal) e embaralha a ordem. */
+function pickLots(s: AuctionState, n: number): string[] {
+  const rand = () => nextRandom(s);
+  const byRole = ROLES.map(r => shuffle(Object.values(s.champions).filter(c => c.routes[0] === r).map(c => c.id), rand));
+  const chosen: string[] = [];
+  for (let i = 0; chosen.length < n && byRole.some(l => l.length); i = (i + 1) % ROLES.length) {
+    const id = byRole[i].shift();
+    if (id) chosen.push(id);
+  }
+  return shuffle(chosen, rand);
 }
 
 // ---------- ações ----------
@@ -273,10 +244,29 @@ export function placeBid(s: AuctionState, playerId: string, amount: number, now:
   const bid: Bid = { seq: s.seq, champId: cur.champId, playerId, amount, at: now };
   cur.highBid = bid;
   cur.bidCount++;
-  cur.endsAt = now + s.config.bidTimeMs;
+  cur.endsAt = Math.max(cur.endsAt, now + s.config.bidExtendMs);
   s.bids.push(bid);
   emit(s, { type: 'bid', champId: cur.champId, playerId, amount, at: now });
   return { ok: true, bid };
+}
+
+export function passLot(s: AuctionState, playerId: string, now: number): Result {
+  if (s.phase !== 'bidding' || !s.current) return { ok: false, reason: 'Nenhum campeão em disputa.' };
+  const cur = s.current;
+  if (cur.highBid?.playerId === playerId) return { ok: false, reason: 'Você tem o maior lance: não dá para passar.' };
+  if (cur.passes.includes(playerId)) return { ok: true };
+  cur.passes.push(playerId);
+  emit(s, { type: 'pass', champId: cur.champId, playerId, at: now });
+  closeIfEveryonePassed(s, now);
+  return { ok: true };
+}
+
+/** Se ninguém mais pode cobrir (todos passaram ou não podem), o lote fecha na hora. */
+function closeIfEveryonePassed(s: AuctionState, now: number) {
+  const cur = s.current;
+  if (!cur) return;
+  const contenders = s.players.filter(p => p.id !== cur.highBid?.playerId && bidEligibility(s, p.id).ok);
+  if (!contenders.length) cur.endsAt = Math.min(cur.endsAt, now);
 }
 
 export function chooseRoute(s: AuctionState, playerId: string, role: Role, now: number): Result {
@@ -301,7 +291,7 @@ export function tick(s: AuctionState, now: number): void {
   if (now >= s.current.endsAt) resolveLot(s, now);
 }
 
-/** Próximo instante em que tick() precisa rodar (útil para agendar no servidor). */
+/** Próximo instante em que tick() precisa rodar. */
 export function nextDeadline(s: AuctionState): number | null {
   if (s.phase === 'finished') return null;
   if (s.phase === 'routePick') return s.routePick!.deadline;
@@ -309,54 +299,35 @@ export function nextDeadline(s: AuctionState): number | null {
 }
 
 function startNextLot(s: AuctionState, now: number) {
-  if (!openSlots(s).length || !s.queue.length) return finish(s, now);
+  if (allFull(s) || !s.queue.length) return finish(s, now);
   const champId = s.queue.shift()!;
   s.current = {
-    champId, highBid: null, bidCount: 0,
+    champId, index: s.totalLots - s.queue.length, highBid: null, bidCount: 0, passes: [],
     startedAt: now, endsAt: now + s.config.bidTimeMs,
-    attempt: (s.attempts[champId] ?? 0) + 1,
   };
-  emit(s, { type: 'lot_start', champId, attempt: s.current.attempt, at: now });
-
-  const eligible = s.players.filter(p => bidEligibility(s, p.id).ok);
-  if (eligible.length === 0) {
-    const any = s.players.find(p => validRoles(s, p.id, champId).length)!;
-    emit(s, { type: 'forced', champId, playerId: any.id, at: now });
-    beginPlacement(s, any.id, champId, 0, 'sorteio', now);
-  } else if (eligible.length === 1 && s.config.autoAssignSingleBidder) {
-    emit(s, { type: 'only_option', champId, playerId: eligible[0].id, at: now });
-    beginPlacement(s, eligible[0].id, champId, 0, 'unico', now);
-  }
+  emit(s, { type: 'lot_start', champId, index: s.current.index, at: now });
+  closeIfEveryonePassed(s, now); // ninguém pode receber este campeão: fecha direto
 }
 
 function resolveLot(s: AuctionState, now: number) {
   const cur = s.current!;
-  const champId = cur.champId;
   if (cur.highBid) {
     const p = getPlayer(s, cur.highBid.playerId)!;
     p.budget -= cur.highBid.amount;
-    emit(s, { type: 'sold', champId, playerId: p.id, amount: cur.highBid.amount, at: now });
-    beginPlacement(s, p.id, champId, cur.highBid.amount, 'leilao', now);
+    emit(s, { type: 'sold', champId: cur.champId, playerId: p.id, amount: cur.highBid.amount, at: now });
+    beginPlacement(s, p.id, cur.champId, cur.highBid.amount, now);
     return;
   }
-  s.attempts[champId] = (s.attempts[champId] ?? 0) + 1;
-  if (s.attempts[champId] < s.config.maxNoBidAttempts) {
-    s.queue.push(champId);
-    s.current = null;
-    s.intermissionUntil = now + s.config.intermissionMs;
-    emit(s, { type: 'requeue', champId, at: now });
-    return;
-  }
-  const eligible = s.players.filter(p => validRoles(s, p.id, champId).length > 0);
-  const pick = eligible[Math.floor(nextRandom(s) * eligible.length)];
-  emit(s, { type: 'forced', champId, playerId: pick.id, at: now });
-  beginPlacement(s, pick.id, champId, 0, 'sorteio', now);
+  s.leftovers.push(cur.champId);
+  s.current = null;
+  s.intermissionUntil = now + s.config.intermissionMs;
+  emit(s, { type: 'unsold', champId: cur.champId, at: now });
 }
 
-function beginPlacement(s: AuctionState, playerId: string, champId: string, price: number, how: AcquiredHow, now: number) {
+function beginPlacement(s: AuctionState, playerId: string, champId: string, price: number, now: number) {
   const options = validRoles(s, playerId, champId);
   s.current = null;
-  s.routePick = { playerId, champId, price, how, options, deadline: now + s.config.routePickMs };
+  s.routePick = { playerId, champId, price, options, deadline: now + s.config.routePickMs };
   if (options.length === 1) {
     placeChampion(s, options[0], now, 'unica');
     return;
@@ -374,17 +345,43 @@ function autoPickRoute(s: AuctionState, now: number) {
 function placeChampion(s: AuctionState, role: Role, now: number, via: 'escolha' | 'auto' | 'unica') {
   const rp = s.routePick!;
   const p = getPlayer(s, rp.playerId)!;
-  p.roster[role] = { champId: rp.champId, price: rp.price, how: rp.how };
-  s.sales.push({ champId: rp.champId, playerId: p.id, price: rp.price, role, how: rp.how, at: now });
+  p.roster[role] = { champId: rp.champId, price: rp.price, how: 'leilao', offRole: false };
+  s.sales.push({ champId: rp.champId, playerId: p.id, price: rp.price, role, how: 'leilao', offRole: false, at: now });
   s.routePick = null;
   s.phase = 'bidding';
   s.intermissionUntil = now + s.config.intermissionMs;
-  emit(s, { type: 'placed', champId: rp.champId, playerId: p.id, role, via, price: rp.price, how: rp.how, at: now });
-  if (!openSlots(s).length) finish(s, now);
+  emit(s, { type: 'placed', champId: rp.champId, playerId: p.id, role, via, price: rp.price, offRole: false, at: now });
+  if (allFull(s)) finish(s, now);
+}
+
+/** Completa as vagas vazias de graça com os campeões não vendidos (na rota, se possível). */
+function fillWithLeftovers(s: AuctionState, now: number) {
+  const pool = [...s.leftovers, ...s.queue];
+  s.queue = [];
+  const take = (pred: (id: string) => boolean) => {
+    const i = pool.findIndex(pred);
+    return i === -1 ? null : pool.splice(i, 1)[0];
+  };
+  // Primeiro tenta encaixar na rota certa (campeões mais fortes primeiro), depois fora da rota.
+  pool.sort((a, b) => s.champions[b].tier - s.champions[a].tier);
+  for (const pass of ['inRole', 'any'] as const) {
+    for (const p of s.players) {
+      for (const role of openRoles(p)) {
+        const id = take(c => pass === 'any' || s.champions[c].routes.includes(role));
+        if (!id) continue;
+        const offRole = !s.champions[id].routes.includes(role);
+        p.roster[role] = { champId: id, price: 0, how: 'sobra', offRole };
+        s.sales.push({ champId: id, playerId: p.id, price: 0, role, how: 'sobra', offRole, at: now });
+        emit(s, { type: 'placed', champId: id, playerId: p.id, role, via: 'sobra', price: 0, offRole, at: now });
+      }
+    }
+  }
+  s.leftovers = pool;
 }
 
 function finish(s: AuctionState, now: number) {
-  s.phase = 'finished';
   s.current = null;
+  if (!allFull(s)) fillWithLeftovers(s, now);
+  s.phase = 'finished';
   emit(s, { type: 'finished', at: now });
 }

@@ -2,7 +2,7 @@ import 'server-only';
 import { createAdminClient } from '@/lib/supabase/admin';
 import {
   ROLES, type BotProfile, type Champion, type Role,
-  chooseRoute, createGame, placeBid,
+  chooseRoute, createGame, passLot, placeBid,
 } from '@/lib/auction/engine';
 import { createBrains } from '@/lib/auction/bots';
 import { advance, nextWake } from '@/lib/auction/runner';
@@ -16,9 +16,9 @@ type Result<T = object> = ({ ok: true } & T) | { ok: false; reason: string };
 
 const BOT_NAMES = ['Bot Barão', 'Bot Arauto', 'Bot Poro', 'Bot Arongueijo', 'Bot Dragão', 'Bot Cuidador'];
 const BOT_PROFILES: BotProfile[] = ['agressivo', 'economico', 'equilibrado', 'estrategico', 'equilibrado', 'agressivo'];
-const SPEED_CONFIG: Record<RoomSpeed, { bidTimeMs: number; routePickMs: number; intermissionMs: number }> = {
-  normal: { bidTimeMs: 10_000, routePickMs: 10_000, intermissionMs: 1_500 },
-  rapido: { bidTimeMs: 5_000, routePickMs: 7_000, intermissionMs: 900 },
+const SPEED_CONFIG: Record<RoomSpeed, { bidTimeMs: number; bidExtendMs: number; routePickMs: number; intermissionMs: number }> = {
+  normal: { bidTimeMs: 10_000, bidExtendMs: 3_000, routePickMs: 10_000, intermissionMs: 1_200 },
+  rapido: { bidTimeMs: 6_000, bidExtendMs: 2_000, routePickMs: 7_000, intermissionMs: 800 },
 };
 const CODE_RE = /^[A-Z0-9]{6}$/;
 
@@ -218,6 +218,7 @@ export async function performAction(
     advance(s, brains, now);
     let result: { ok: boolean; reason?: string } = { ok: true };
     if (action.type === 'bid') result = placeBid(s, playerId, action.amount, now);
+    else if (action.type === 'pass') result = passLot(s, playerId, now);
     else if (action.type === 'route') result = chooseRoute(s, playerId, action.role, now);
     advance(s, brains, now);
 
@@ -243,7 +244,7 @@ async function persistFinal(admin: Admin, room: RoomRow, auctionId: string, s: A
     const slot = p.roster[lane]!;
     return {
       auction_id: auctionId, seat: playerSeat(p.id), lane, champion_id: slot.champId,
-      price_cents: slot.price, acquired_how: slot.how,
+      price_cents: slot.price, acquired_how: slot.how, off_role: slot.offRole,
     };
   }));
   const bids = s.bids.map(b => ({
