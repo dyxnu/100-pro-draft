@@ -191,17 +191,25 @@ export async function performAction(
   code: string, userId: string, action: ClientAction, now = Date.now(),
 ): Promise<ActionResponse> {
   const admin = createAdminClient();
-  const room = await getRoom(admin, code);
-  if (!room || (room.status !== 'drafting' && room.status !== 'finished'))
-    return { ok: false, reason: 'Nenhum draft em andamento nesta sala.', serverNow: now };
+  const c = normalizeCode(code);
+  if (!CODE_RE.test(c)) return { ok: false, reason: 'Sala não encontrada.', serverNow: now };
 
-  const { data: me } = await admin.from('room_members')
-    .select('seat').eq('room_id', room.id).eq('user_id', userId).maybeSingle<{ seat: number }>();
+  // Uma única consulta traz sala + minha vaga + leilão (cada ida ao banco custa latência).
+  const { data: joined } = await admin.from('rooms')
+    .select('*, room_members(seat, user_id), auctions(*)')
+    .eq('code', c).maybeSingle<RoomRow & { room_members: { seat: number; user_id: string | null }[]; auctions: AuctionRow | AuctionRow[] | null }>();
+  if (!joined || (joined.status !== 'drafting' && joined.status !== 'finished'))
+    return { ok: false, reason: 'Nenhum draft em andamento nesta sala.', serverNow: now };
+  const room: RoomRow = joined;
+  const me = joined.room_members.find(m => m.user_id === userId);
   if (!me) return { ok: false, reason: 'Você não está nesta sala.', serverNow: now };
   const playerId = seatPlayerId(me.seat);
+  let preloaded = Array.isArray(joined.auctions) ? joined.auctions[0] ?? null : joined.auctions;
 
   for (let attempt = 0; attempt < 5; attempt++) {
-    const { data: row } = await admin.from('auctions').select('*').eq('room_id', room.id).single<AuctionRow>();
+    const row = preloaded
+      ?? (await admin.from('auctions').select('*').eq('room_id', room.id).single<AuctionRow>()).data;
+    preloaded = null; // nas novas tentativas, relê do banco
     if (!row) return { ok: false, reason: 'Leilão não encontrado.', serverNow: now };
     const s = row.state;
     const brains = row.bot_brains;

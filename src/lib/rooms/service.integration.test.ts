@@ -42,10 +42,11 @@ describe.runIf(enabled)('salas no Supabase (integração)', () => {
     expect(members!.filter(m => m.user_id)).toHaveLength(1);
 
     // O anfitrião não dá lances: os bots jogam e o servidor resolve o resto (rota automática, sorteios).
+    // O relógio pula 30 s por chamada: simula um servidor que só é chamado de vez em quando.
     let now = t0;
     let res = await svc.performAction(code, host.id, { type: 'tick' }, now);
-    for (let i = 0; i < 400 && res.state?.phase !== 'finished'; i++) {
-      now = Math.max(now + 1, res.nextTickAt ?? now + 1000);
+    for (let i = 0; i < 200 && res.state?.phase !== 'finished'; i++) {
+      now += 30_000;
       res = await svc.performAction(code, host.id, { type: 'tick' }, now);
     }
     expect(res.state?.phase).toBe('finished');
