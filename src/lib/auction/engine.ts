@@ -31,6 +31,7 @@ export interface AuctionConfig {
   intermissionMs: number;
   teamSize: number;
   lotsPerPlayer: number;
+  showOverall: boolean;  // overall à mostra durante o leilão (ou escondido: "leilão no olho")
 }
 
 export const DEFAULT_CONFIG: AuctionConfig = {
@@ -43,6 +44,7 @@ export const DEFAULT_CONFIG: AuctionConfig = {
   intermissionMs: 1200,
   teamSize: 5,
   lotsPerPlayer: 6,
+  showOverall: true,
 };
 
 export type BotProfile = 'economico' | 'equilibrado' | 'agressivo' | 'estrategico';

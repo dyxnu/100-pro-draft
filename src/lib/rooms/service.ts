@@ -7,6 +7,9 @@ import {
 import { createBrains } from '@/lib/auction/bots';
 import { advance, nextWake } from '@/lib/auction/runner';
 import {
+  type TournamentState, changeStrategy, createTournament, setReady, swapLineup, tickTournament, tournamentDeadline,
+} from '@/lib/tournament/engine';
+import {
   type ActionResponse, type AuctionRow, type ClientAction, type MemberRow, type RoomRow, type RoomSpeed,
   ROOM_SIZE, playerSeat, seatPlayerId,
 } from './types';
@@ -48,7 +51,7 @@ async function getRoom(admin: Admin, code: string): Promise<RoomRow | null> {
 
 async function getMembers(admin: Admin, roomId: string): Promise<MemberRow[]> {
   const { data, error } = await admin.from('room_members')
-    .select('room_id, seat, user_id, bot_profile, display_name').eq('room_id', roomId).order('seat');
+    .select('room_id, seat, user_id, bot_profile, display_name, ready').eq('room_id', roomId).order('seat');
   if (error) throw error;
   return data as MemberRow[];
 }
@@ -88,7 +91,7 @@ export async function joinRoom(code: string, userId: string, displayName: string
     if (members.some(m => m.user_id === userId)) return { ok: true };
     if (room.status !== 'lobby') return { ok: false, reason: 'Esse draft já começou.' };
     const taken = new Set(members.map(m => m.seat));
-    const seat = [...Array(ROOM_SIZE).keys()].find(i => !taken.has(i));
+    const seat = [...Array(room.max_players).keys()].find(i => !taken.has(i));
     if (seat == null) return { ok: false, reason: 'A sala está cheia.' };
     const { error } = await admin.from('room_members')
       .insert({ room_id: room.id, seat, user_id: userId, display_name: displayName });
@@ -113,9 +116,9 @@ export async function leaveRoom(code: string, userId: string): Promise<Result> {
   return { ok: true };
 }
 
-export async function updateRoomSettings(
-  code: string, userId: string, settings: { botsEnabled?: boolean; speed?: RoomSpeed },
-): Promise<Result> {
+export interface RoomSettings { botsEnabled?: boolean; speed?: RoomSpeed; maxPlayers?: number; showOverall?: boolean }
+
+export async function updateRoomSettings(code: string, userId: string, settings: RoomSettings): Promise<Result> {
   const admin = createAdminClient();
   const room = await getRoom(admin, code);
   if (!room) return { ok: false, reason: 'Sala não encontrada.' };
@@ -124,7 +127,26 @@ export async function updateRoomSettings(
   const patch: Record<string, unknown> = {};
   if (settings.botsEnabled != null) patch.bots_enabled = settings.botsEnabled;
   if (settings.speed) patch.speed = settings.speed;
+  if (settings.showOverall != null) patch.show_overall = settings.showOverall;
+  if (settings.maxPlayers != null) {
+    const members = await getMembers(admin, room.id);
+    const highestSeat = Math.max(0, ...members.map(m => m.seat));
+    const n = Math.round(settings.maxPlayers);
+    if (n < 2 || n > ROOM_SIZE) return { ok: false, reason: `A sala aceita de 2 a ${ROOM_SIZE} participantes.` };
+    if (n < members.length || n <= highestSeat) return { ok: false, reason: 'Já tem mais gente na sala do que esse limite.' };
+    patch.max_players = n;
+  }
   await admin.from('rooms').update(patch).eq('id', room.id);
+  // Mudou a regra: todo mundo confirma de novo.
+  await admin.from('room_members').update({ ready: false }).eq('room_id', room.id).not('user_id', 'is', null);
+  return { ok: true };
+}
+
+export async function setLobbyReady(code: string, userId: string, ready: boolean): Promise<Result> {
+  const admin = createAdminClient();
+  const room = await getRoom(admin, code);
+  if (!room || room.status !== 'lobby') return { ok: false, reason: 'O lobby não está aberto.' };
+  await admin.from('room_members').update({ ready }).eq('room_id', room.id).eq('user_id', userId);
   return { ok: true };
 }
 
@@ -136,9 +158,12 @@ export async function startDraft(code: string, userId: string, now = Date.now())
   if (room.status !== 'lobby') return { ok: false, reason: 'O draft já começou.' };
 
   let members = await getMembers(admin, room.id);
-  const free = [...Array(ROOM_SIZE).keys()].filter(i => !members.some(m => m.seat === i));
-  if (free.length && !room.bots_enabled) {
-    return { ok: false, reason: `Faltam ${free.length} jogador(es). Convide mais gente ou ative os bots.` };
+  const notReady = members.filter(m => m.user_id && m.user_id !== userId && !m.ready);
+  if (notReady.length) return { ok: false, reason: `Falta confirmar: ${notReady.map(m => m.display_name).join(', ')}.` };
+  // Sem bots, a sala começa com quem está (mínimo 2). Com bots, completa até o limite.
+  const free = room.bots_enabled ? [...Array(room.max_players).keys()].filter(i => !members.some(m => m.seat === i)) : [];
+  if (members.length + free.length < 2) {
+    return { ok: false, reason: 'Precisa de pelo menos 2 participantes. Convide alguém ou ative os bots.' };
   }
   if (free.length) {
     const used = new Set(members.map(m => m.display_name));
@@ -168,7 +193,7 @@ export async function startDraft(code: string, userId: string, now = Date.now())
     champions,
     seed,
     now,
-    config: SPEED_CONFIG[room.speed],
+    config: { ...SPEED_CONFIG[room.speed], showOverall: room.show_overall !== false },
   });
   const brains = createBrains(state);
   advance(state, brains, now);
@@ -213,8 +238,11 @@ export async function performAction(
     if (!row) return { ok: false, reason: 'Leilão não encontrado.', serverNow: now };
     const s = row.state;
     const brains = row.bot_brains;
-    const before = JSON.stringify([s, brains]);
+    let tour: TournamentState | null = row.tournament ?? null;
+    const before = JSON.stringify([s, brains, tour]);
+    const auctionWasDone = s.phase === 'finished';
 
+    // 1) Leilão
     advance(s, brains, now);
     let result: { ok: boolean; reason?: string } = { ok: true };
     if (action.type === 'bid') result = placeBid(s, playerId, action.amount, now);
@@ -222,24 +250,57 @@ export async function performAction(
     else if (action.type === 'route') result = chooseRoute(s, playerId, action.role, now);
     advance(s, brains, now);
 
-    const wake = nextWake(s, brains);
-    if (JSON.stringify([s, brains]) === before) {
-      return { ...result, serverNow: now, state: s, nextTickAt: wake };
+    // 2) Campeonato (começa quando o leilão termina)
+    if (s.phase === 'finished' && !tour) tour = createTournament(s, now);
+    if (tour) {
+      advanceTournament(tour, now, s.champions);
+      if (action.type === 'lineup_swap') result = swapLineup(tour, playerId, action.a, action.b);
+      else if (action.type === 'ready') result = setReady(tour, playerId, action.ready);
+      else if (action.type === 'strategy') result = changeStrategy(tour, playerId, action.strategy, now, s.champions);
+      advanceTournament(tour, now, s.champions);
+    } else if (action.type === 'lineup_swap' || action.type === 'ready' || action.type === 'strategy') {
+      result = { ok: false, reason: 'O campeonato começa quando o leilão terminar.' };
+    }
+
+    const wake = earliest(nextWake(s, brains), tour ? tournamentDeadline(tour) : null);
+    if (JSON.stringify([s, brains, tour]) === before) {
+      return { ...result, serverNow: now, state: s, tournament: tour, nextTickAt: wake };
     }
 
     // Trava otimista: só grava se ninguém gravou desde a leitura.
     const { data: saved } = await admin.from('auctions')
-      .update({ state: s, bot_brains: brains, version: row.version + 1, next_tick_at: toIso(wake), updated_at: new Date().toISOString() })
+      .update({
+        state: s, bot_brains: brains, tournament: tour, version: row.version + 1,
+        next_tick_at: toIso(wake), updated_at: new Date().toISOString(),
+      })
       .eq('id', row.id).eq('version', row.version).select('id');
     if (!saved?.length) continue; // outro pedido ganhou a corrida: relê e refaz
 
-    if (s.phase === 'finished' && room.status !== 'finished') await persistFinal(admin, room, row.id, s);
-    return { ...result, serverNow: now, state: s, nextTickAt: wake };
+    if (s.phase === 'finished' && !auctionWasDone) await persistAuction(admin, row.id, s);
+    if (tour?.stage === 'done' && room.status !== 'finished') {
+      await admin.from('rooms').update({ status: 'finished', finished_at: new Date().toISOString() }).eq('id', room.id);
+    }
+    return { ...result, serverNow: now, state: s, tournament: tour, nextTickAt: wake };
   }
   return { ok: false, reason: 'Servidor ocupado, tente de novo.', serverNow: now };
 }
 
-async function persistFinal(admin: Admin, room: RoomRow, auctionId: string, s: AuctionRow['state']) {
+/** Processa todos os prazos vencidos do campeonato (início de rodada, fim de partidas). */
+function advanceTournament(t: TournamentState, now: number, champs: AuctionRow['state']['champions']) {
+  for (let i = 0; i < 10; i++) {
+    const d = tournamentDeadline(t);
+    const v = t.version;
+    tickTournament(t, now, champs);
+    if (t.version === v && (d == null || d > now)) break;
+  }
+}
+
+const earliest = (...xs: (number | null)[]) => {
+  const v = xs.filter((x): x is number => x != null);
+  return v.length ? Math.min(...v) : null;
+};
+
+async function persistAuction(admin: Admin, auctionId: string, s: AuctionRow['state']) {
   const rosters = s.players.flatMap(p => ROLES.map(lane => {
     const slot = p.roster[lane]!;
     return {
@@ -253,7 +314,6 @@ async function persistFinal(admin: Admin, room: RoomRow, auctionId: string, s: A
   }));
   await admin.from('rosters').upsert(rosters, { onConflict: 'auction_id,seat,lane', ignoreDuplicates: true });
   if (bids.length) await admin.from('bids').upsert(bids, { onConflict: 'auction_id,seq', ignoreDuplicates: true });
-  await admin.from('rooms').update({ status: 'finished', finished_at: new Date().toISOString() }).eq('id', room.id);
 }
 
 const toIso = (ms: number | null) => (ms == null ? null : new Date(ms).toISOString());

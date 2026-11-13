@@ -10,21 +10,27 @@ import { BOT_PROFILES } from '@/lib/auction/bots';
 import type { ActionResponse, ClientAction } from '@/lib/rooms/types';
 import { seatPlayerId } from '@/lib/rooms/types';
 import { getBrowserClient } from '@/lib/supabase/client';
+import type { TournamentState } from '@/lib/tournament/engine';
+import { buildCard, CLASS_LABEL } from '@/lib/champions/cards';
+import { TournamentView } from '@/components/tournament/TournamentView';
 import { ChampImg, HOW_LABEL, ROLE_LABEL, ROLE_SHORT, seatColor } from './ui';
 import './draft.css';
 
-interface Snapshot { state: AuctionState; nextTickAt: number | null }
+interface Snapshot { state: AuctionState; tournament: TournamentState | null; nextTickAt: number | null }
+// Ordem das versões: leilão primeiro, depois campeonato (para descartar mensagens antigas).
+const versionOf = (st: AuctionState, t: TournamentState | null) => st.version * 1_000_000 + (t?.version ?? -1);
 
-export function AuctionView({ code, roomId, initialState, initialNextTickAt, serverNow, mySeat }: {
+export function AuctionView({ code, roomId, initialState, initialTournament, initialNextTickAt, serverNow, mySeat }: {
   code: string;
   roomId: string;
   initialState: AuctionState;
+  initialTournament: TournamentState | null;
   initialNextTickAt: number | null;
   serverNow: number;
   mySeat: number | null;
 }) {
   const me = mySeat == null ? null : seatPlayerId(mySeat);
-  const [snap, setSnap] = useState<Snapshot>({ state: initialState, nextTickAt: initialNextTickAt });
+  const [snap, setSnap] = useState<Snapshot>({ state: initialState, tournament: initialTournament, nextTickAt: initialNextTickAt });
   const [pending, setPending] = useState(false);
   const [toast, setToast] = useState<string | null>(null);
   const [custom, setCustom] = useState('');
@@ -34,8 +40,8 @@ export function AuctionView({ code, roomId, initialState, initialNextTickAt, ser
   const s = snap.state;
 
   // Só aceita estados mais novos (realtime e respostas podem chegar fora de ordem).
-  const apply = useCallback((state: AuctionState, nextTickAt: number | null) => {
-    setSnap(prev => (state.version >= prev.state.version ? { state, nextTickAt } : prev));
+  const apply = useCallback((state: AuctionState, tournament: TournamentState | null, nextTickAt: number | null) => {
+    setSnap(prev => (versionOf(state, tournament) >= versionOf(prev.state, prev.tournament) ? { state, tournament, nextTickAt } : prev));
   }, []);
 
   const send = useCallback(async (action: ClientAction): Promise<ActionResponse> => {
@@ -51,7 +57,7 @@ export function AuctionView({ code, roomId, initialState, initialNextTickAt, ser
     }
     const t1 = Date.now();
     if (t1 - t0 < 1500) offset.current = data.serverNow - (t0 + t1) / 2;
-    if (data.state) apply(data.state, data.nextTickAt ?? null);
+    if (data.state) apply(data.state, data.tournament ?? null, data.nextTickAt ?? null);
     return data;
   }, [code, apply, serverTime]);
 
@@ -60,27 +66,28 @@ export function AuctionView({ code, roomId, initialState, initialNextTickAt, ser
     const sb = getBrowserClient();
     const ch = sb.channel(`leilao:${roomId}`)
       .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'auctions', filter: `room_id=eq.${roomId}` }, (p: { new: unknown }) => {
-        const row = p.new as { state?: AuctionState; next_tick_at?: string | null };
-        if (row.state) apply(row.state, row.next_tick_at ? Date.parse(row.next_tick_at) : null);
+        const row = p.new as { state?: AuctionState; tournament?: TournamentState | null; next_tick_at?: string | null };
+        if (row.state) apply(row.state, row.tournament ?? null, row.next_tick_at ? Date.parse(row.next_tick_at) : null);
       })
       .subscribe();
     return () => { sb.removeChannel(ch); };
   }, [roomId, apply]);
 
   // "Cutucada" no relógio do servidor quando um prazo vence (fim de lote, vez dos bots...).
+  const done = snap.tournament?.stage === 'done';
   useEffect(() => {
-    if (!me || s.phase === 'finished' || snap.nextTickAt == null) return;
+    if (!me || done || snap.nextTickAt == null) return;
     const delay = Math.max(0, snap.nextTickAt - serverTime()) + 100 + Math.random() * 400;
     const id = setTimeout(() => { void send({ type: 'tick' }); }, delay);
     return () => clearTimeout(id);
-  }, [snap, me, s.phase, send, serverTime]);
+  }, [snap, me, done, send, serverTime]);
 
   // Rede de segurança caso alguma mensagem em tempo real se perca.
   useEffect(() => {
-    if (s.phase === 'finished') return;
+    if (done) return;
     const id = setInterval(() => { if (me) void send({ type: 'tick' }); }, 5000);
     return () => clearInterval(id);
-  }, [s.phase, me, send]);
+  }, [done, me, send]);
 
   const act = async (action: ClientAction) => {
     setPending(true);
@@ -92,7 +99,16 @@ export function AuctionView({ code, roomId, initialState, initialNextTickAt, ser
     }
   };
 
-  if (s.phase === 'finished') return <Results s={s} me={me} />;
+  if (s.phase === 'finished') {
+    return (
+      <>
+        {snap.tournament
+          ? <TournamentView s={s} t={snap.tournament} me={me} act={act} pending={pending} serverTime={serverTime} auctionSummary={<Results s={s} me={me} />} />
+          : <Results s={s} me={me} />}
+        {toast && <div className="nx-draft"><div className="toast" role="alert">{toast}</div></div>}
+      </>
+    );
+  }
 
   const cur = s.current;
   const rp = s.routePick;
@@ -149,6 +165,7 @@ function StageHeader({ s, me, lastPlaced }: {
   if (!id) return <h2 className="champ-name">Preparando…</h2>;
   const champ = s.champions[id];
   const myValid = cur && me ? validRoles(s, me, id) : null;
+  const card = s.config.showOverall !== false ? buildCard(champ.id, champ.routes) : null;
   const name = (pid: string) => getPlayer(s, pid)?.name ?? '?';
 
   let tag: React.ReactNode = '', amount = '—', leader: React.ReactNode = '';
@@ -177,9 +194,18 @@ function StageHeader({ s, me, lastPlaced }: {
       <h2 className="champ-name">{champ.name}</h2>
       <div className="routes">
         {champ.routes.map(r => (
-          <span key={r} className={`chip ${myValid ? (myValid.includes(r) ? 'ok' : 'no') : ''}`}>{ROLE_LABEL[r]}</span>
+          <span key={r} className={`chip ${myValid ? (myValid.includes(r) ? 'ok' : 'no') : ''}`}>
+            {ROLE_LABEL[r]}{card && <b className="ovr"> {card.ovr[r]}</b>}
+          </span>
         ))}
+        {card && <span className="chip cls">{CLASS_LABEL[card.champClass]}</span>}
+        {!s.config.showOverall && <span className="chip cls">Overall escondido: leilão no olho</span>}
       </div>
+      {card && (
+        <div className="attrs-line">
+          {(Object.entries(card.attrs) as [string, number][]).map(([k, v]) => <span key={k}><b>{v}</b> {k}</span>)}
+        </div>
+      )}
       <div className="bid-box">
         <div className="bid-label">Maior lance</div>
         <div className="bid-amount">{amount}</div>

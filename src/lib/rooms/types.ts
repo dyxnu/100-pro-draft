@@ -1,5 +1,7 @@
 import type { AuctionState, BotProfile, Role } from '@/lib/auction/engine';
 import type { BotBrains } from '@/lib/auction/bots';
+import type { Strategy } from '@/lib/match/model';
+import type { TournamentState } from '@/lib/tournament/engine';
 
 export type RoomStatus = 'lobby' | 'drafting' | 'finished' | 'abandoned';
 export type RoomSpeed = 'normal' | 'rapido';
@@ -13,6 +15,7 @@ export interface RoomRow {
   bots_enabled: boolean;
   speed: RoomSpeed;
   max_players: number;
+  show_overall: boolean;
   created_at: string;
   started_at: string | null;
   finished_at: string | null;
@@ -24,6 +27,7 @@ export interface MemberRow {
   user_id: string | null;
   bot_profile: BotProfile | null;
   display_name: string;
+  ready: boolean;
 }
 
 export interface AuctionRow {
@@ -31,6 +35,7 @@ export interface AuctionRow {
   room_id: string;
   state: AuctionState;
   bot_brains: BotBrains;
+  tournament: TournamentState | null;
   version: number;
   next_tick_at: string | null;
 }
@@ -40,6 +45,9 @@ export type ClientAction =
   | { type: 'bid'; amount: number }
   | { type: 'pass' }
   | { type: 'route'; role: Role }
+  | { type: 'lineup_swap'; a: Role; b: Role }
+  | { type: 'strategy'; strategy: Strategy }
+  | { type: 'ready'; ready: boolean }
   | { type: 'tick' };
 
 export interface ActionResponse {
@@ -47,6 +55,7 @@ export interface ActionResponse {
   reason?: string;
   serverNow: number;
   state?: AuctionState;
+  tournament?: TournamentState | null;
   nextTickAt?: number | null;
 }
 

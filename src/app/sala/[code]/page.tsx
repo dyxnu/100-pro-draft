@@ -25,7 +25,7 @@ export default async function SalaPage({ params }: Params) {
   const { data: room } = await supabase.from('rooms').select('*').eq('code', code).maybeSingle<RoomRow>();
   if (!room) notFound();
   const { data: members } = await supabase.from('room_members')
-    .select('room_id, seat, user_id, bot_profile, display_name').eq('room_id', room.id).order('seat');
+    .select('room_id, seat, user_id, bot_profile, display_name, ready').eq('room_id', room.id).order('seat');
   const list = (members ?? []) as MemberRow[];
   const me = list.find(m => m.user_id === session.user.id) ?? null;
 
@@ -38,7 +38,7 @@ export default async function SalaPage({ params }: Params) {
   }
 
   const { data: auction } = await supabase.from('auctions')
-    .select('id, room_id, state, version, next_tick_at').eq('room_id', room.id).maybeSingle<Omit<AuctionRow, 'bot_brains'>>();
+    .select('id, room_id, state, tournament, version, next_tick_at').eq('room_id', room.id).maybeSingle<Omit<AuctionRow, 'bot_brains'>>();
   if (!auction) {
     return <Message title="Draft em andamento" text="Esse draft já começou e você não está nesta sala." />;
   }
@@ -47,6 +47,7 @@ export default async function SalaPage({ params }: Params) {
       code={room.code}
       roomId={room.id}
       initialState={auction.state}
+      initialTournament={auction.tournament ?? null}
       initialNextTickAt={auction.next_tick_at ? Date.parse(auction.next_tick_at) : null}
       serverNow={Date.now()}
       mySeat={me?.seat ?? null}

@@ -4,6 +4,7 @@ import { isAdminConfigured } from '@/lib/supabase/admin';
 import { performAction } from '@/lib/rooms/service';
 import type { ClientAction } from '@/lib/rooms/types';
 import { ROLES, type Role } from '@/lib/auction/engine';
+import { isStrategy } from '@/lib/match/model';
 
 // Único ponto de entrada para ações do leilão. O navegador só envia a intenção;
 // o servidor valida tudo (vez, saldo, rota, tempo) com o horário dele.
@@ -32,7 +33,10 @@ function parseAction(body: unknown): ClientAction | null {
   if (b.type === 'pass') return { type: 'pass' };
   if (b.type === 'bid' && Number.isInteger(b.amount) && (b.amount as number) > 0 && (b.amount as number) <= 100_00)
     return { type: 'bid', amount: b.amount as number };
-  if (b.type === 'route' && typeof b.role === 'string' && (ROLES as readonly string[]).includes(b.role))
-    return { type: 'route', role: b.role as Role };
+  const isRole = (v: unknown): v is Role => typeof v === 'string' && (ROLES as readonly string[]).includes(v);
+  if (b.type === 'route' && isRole(b.role)) return { type: 'route', role: b.role };
+  if (b.type === 'lineup_swap' && isRole(b.a) && isRole(b.b) && b.a !== b.b) return { type: 'lineup_swap', a: b.a, b: b.b };
+  if (b.type === 'ready' && typeof b.ready === 'boolean') return { type: 'ready', ready: b.ready };
+  if (b.type === 'strategy' && isStrategy(b.strategy)) return { type: 'strategy', strategy: b.strategy };
   return null;
 }

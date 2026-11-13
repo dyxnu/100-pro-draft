@@ -41,7 +41,7 @@ describe.runIf(enabled)('salas no Supabase (integração)', () => {
     expect(members).toHaveLength(6);
     expect(members!.filter(m => m.user_id)).toHaveLength(1);
 
-    // O anfitrião não dá lances: os bots jogam e o servidor resolve o resto (rota automática, sorteios).
+    // O anfitrião não dá lances: os bots jogam e o servidor resolve o resto (rota automática, sobras).
     // O relógio pula 30 s por chamada: simula um servidor que só é chamado de vez em quando.
     let now = t0;
     let res = await svc.performAction(code, host.id, { type: 'tick' }, now);
@@ -50,17 +50,33 @@ describe.runIf(enabled)('salas no Supabase (integração)', () => {
       res = await svc.performAction(code, host.id, { type: 'tick' }, now);
     }
     expect(res.state?.phase).toBe('finished');
+    expect(res.tournament?.stage).toBe('lineup');
 
     const { data: room } = await admin.from('rooms').select('id, status').eq('code', code).single();
-    expect(room!.status).toBe('finished');
     const { data: auction } = await admin.from('auctions').select('id').eq('room_id', room!.id).single();
     const { count: rosterCount } = await admin.from('rosters').select('*', { count: 'exact', head: true }).eq('auction_id', auction!.id);
     expect(rosterCount).toBe(30);
     const { count: bidCount } = await admin.from('bids').select('*', { count: 'exact', head: true }).eq('auction_id', auction!.id);
     expect(bidCount).toBe(res.state!.bids.length);
 
-    const late = await svc.performAction(code, host.id, { type: 'bid', amount: 50 }, now + 1000);
+    const late = await svc.performAction(code, host.id, { type: 'bid', amount: 100 }, now + 1000);
     expect(late.ok).toBe(false);
+
+    // Campeonato: o anfitrião troca duas rotas, muda a estratégia e confirma; depois o tempo corre.
+    expect((await svc.performAction(code, host.id, { type: 'lineup_swap', a: 'TOP', b: 'MID' }, now + 2000)).ok).toBe(true);
+    expect((await svc.performAction(code, host.id, { type: 'lineup_swap', a: 'TOP', b: 'MID' }, now + 2500)).ok).toBe(true);
+    const strat = { agressividade: 'agressiva', prioridade: 'dragoes', estilo: 'teamfight', risco: 'normal' } as const;
+    expect((await svc.performAction(code, host.id, { type: 'strategy', strategy: strat }, now + 3000)).ok).toBe(true);
+    res = await svc.performAction(code, host.id, { type: 'ready', ready: true }, now + 3500);
+    now += 4000;
+    for (let i = 0; i < 100 && res.tournament?.stage !== 'done'; i++) {
+      now += 20_000;
+      res = await svc.performAction(code, host.id, { type: 'tick' }, now);
+    }
+    expect(res.tournament?.stage).toBe('done');
+    expect(res.tournament?.champion).toBeTruthy();
+    const { data: finished } = await admin.from('rooms').select('status').eq('code', code).single();
+    expect(finished!.status).toBe('finished');
   });
 
   it('recusa ações de quem não está na sala', async () => {

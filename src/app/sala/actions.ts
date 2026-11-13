@@ -5,7 +5,7 @@ import { revalidatePath } from 'next/cache';
 import { getCurrentUser } from '@/lib/supabase/server';
 import { isAdminConfigured } from '@/lib/supabase/admin';
 import {
-  createRoom, joinRoom, leaveRoom, normalizeCode, startDraft, updateRoomSettings,
+  type RoomSettings, createRoom, joinRoom, leaveRoom, normalizeCode, setLobbyReady, startDraft, updateRoomSettings,
 } from '@/lib/rooms/service';
 import type { RoomSpeed } from '@/lib/rooms/types';
 
@@ -55,7 +55,15 @@ export async function leaveRoomAction(code: string): Promise<RoomFormState> {
   redirect('/jogar');
 }
 
-export async function updateSettingsAction(code: string, settings: { botsEnabled?: boolean; speed?: RoomSpeed }): Promise<RoomFormState> {
+export async function lobbyReadyAction(code: string, ready: boolean): Promise<RoomFormState> {
+  const { user } = await requireUser(`/sala/${code}`);
+  if (!isAdminConfigured) return NOT_READY;
+  const r = await setLobbyReady(code, user.id, ready);
+  revalidatePath(`/sala/${code}`);
+  return r.ok ? {} : { error: r.reason };
+}
+
+export async function updateSettingsAction(code: string, settings: RoomSettings): Promise<RoomFormState> {
   const { user } = await requireUser(`/sala/${code}`);
   if (!isAdminConfigured) return NOT_READY;
   const r = await updateRoomSettings(code, user.id, settings);
