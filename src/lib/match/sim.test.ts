@@ -74,6 +74,31 @@ describe('simulador de partidas', () => {
     expect(aWins).toBe(asA + asB);
   });
 
+  it('mudar a tática ao vivo não altera o que já aconteceu', () => {
+    for (let seed = 1; seed <= 100; seed++) {
+      const base = simulateMatch(STRONG, WEAK, seed);
+      const t = 15 * 60;
+      const changed = simulateMatch(STRONG, WEAK, seed, {
+        changes: [{ t, side: 1, strategy: { agressividade: 'agressiva', prioridade: 'abates', estilo: 'pickoff', risco: 'arriscado' } }],
+      });
+      const before = (r: typeof base) => r.events.filter(e => e.t < t).map(e => e.text);
+      if (base.duration > t) {
+        expect(before(changed)).toEqual(before(base));
+        expect(changed.events.some(e => e.type === 'tactic' && e.side === 1)).toBe(true);
+      }
+    }
+  });
+
+  it('bots adaptam a tática e o resultado continua válido', () => {
+    let adapted = 0;
+    for (let seed = 1; seed <= 100; seed++) {
+      const r = simulateMatch(STRONG, WEAK, seed, { adaptive: [true, true] });
+      expect(r.events[r.events.length - 1].type).toBe('nexus');
+      if (r.events.some(e => e.type === 'tactic')) adapted++;
+    }
+    expect(adapted).toBeGreaterThan(20);
+  });
+
   it('estratégia que combina com o time ajuda', () => {
     const tf: Strategy = { ...DEFAULT_STRATEGY, estilo: 'teamfight' };
     const wombo = ['Malphite', 'Amumu', 'Orianna', 'MissFortune', 'Leona'];

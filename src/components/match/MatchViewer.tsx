@@ -83,7 +83,7 @@ export function MatchViewer({ result, sides, syncStart, syncSpeed = 20, serverNo
   const inhibDown = (s: Side, lane: Lane) => past.some(e => e.type === 'inhibitor' && e.side !== s && e.lane === lane);
   const nexusTowersDown = (s: Side) => past.filter(e => e.type === 'nexus_tower' && e.side !== s).length;
   const count = (s: Side, type: string) => past.filter(e => e.type === type && e.side === s).length;
-  const flashes = result.events.filter(e => e.t <= t && t - e.t < 4 && (e.big || e.type !== 'tower'));
+  const flashes = result.events.filter(e => e.t <= t && t - e.t < 4 && e.type !== 'tactic' && (e.big || e.type !== 'tower'));
   const finished = t >= end;
   const nameOf = (k: PlayerKey) => sides[Number(k[0])].champs[k.slice(2) as Role].name;
 

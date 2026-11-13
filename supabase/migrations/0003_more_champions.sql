@@ -29,3 +29,6 @@ alter table public.rosters add constraint rosters_acquired_how_check
 -- Configurações da sala inspiradas no 100pracada
 alter table public.rooms add column if not exists show_overall boolean not null default true;
 alter table public.room_members add column if not exists ready boolean not null default false;
+
+-- Campeonato mata-mata depois do leilão (estado do torneio, escrito só pelo servidor)
+alter table public.auctions add column if not exists tournament jsonb;
