@@ -1,0 +1,122 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<title>Nexus Draft · testes do motor</title>
+<style>
+  body { background: #0b0f15; color: #e8e6e3; font: 14px/1.5 ui-monospace, Consolas, monospace; padding: 20px; }
+  .ok { color: #3ddc97; } .fail { color: #ff6b81; }
+</style>
+</head>
+<body>
+<h1>Testes do motor do leilão</h1>
+<pre id="out">rodando…</pre>
+<script src="champions.js"></script>
+<script src="engine.js"></script>
+<script src="bots.js"></script>
+<script>
+(function () {
+  const E = NexusEngine, B = NexusBots;
+  const out = [];
+  let failures = 0;
+  const check = (cond, msg) => { if (!cond) { failures++; out.push('<span class="fail">FALHA</span> ' + msg); } };
+
+  // Simula um draft inteiro com relógio falso. humanMode: 'bots' (todos bots) ou 'idle' (todos humanos parados).
+  function simulate(seed, humanMode) {
+    const profiles = ['agressivo', 'economico', 'equilibrado', 'estrategico', 'equilibrado', 'agressivo'];
+    const players = profiles.map((pr, i) => ({ id: 'p' + i, name: 'P' + i, isBot: humanMode === 'bots', botProfile: pr }));
+    let now = 0;
+    const g = E.createGame({ players, champions: NEXUS_CHAMPIONS, seed, now });
+    const brains = B.createBrains(g);
+    let steps = 0;
+    while (g.phase !== 'finished' && steps < 200000) {
+      B.step(g, brains, now);
+      E.tick(g, now);
+      now += 100; steps++;
+    }
+    return { g, now };
+  }
+
+  function validate(g, label) {
+    check(g.phase === 'finished', `${label}: draft não terminou`);
+    const seen = new Set();
+    g.players.forEach(p => {
+      let spent = 0;
+      E.ROLES.forEach(r => {
+        const s = p.roster[r];
+        check(!!s, `${label}: ${p.id} sem ${r}`);
+        if (!s) return;
+        check(!seen.has(s.champId), `${label}: ${s.champId} duplicado`);
+        seen.add(s.champId);
+        check(g.champions[s.champId].routes.includes(r), `${label}: ${s.champId} em rota inválida ${r}`);
+        spent += s.price;
+      });
+      check(p.budget >= 0, `${label}: ${p.id} saldo negativo`);
+      check(spent + p.budget === g.config.budget, `${label}: ${p.id} saldo não bate`);
+    });
+    check(seen.size === 30, `${label}: ${seen.size} campeões distribuídos`);
+    g.bids.forEach(b => check(b.amount >= g.config.minBid && b.amount % 50 === 0, `${label}: lance inválido ${b.amount}`));
+  }
+
+  // 1) Regras unitárias
+  {
+    const players = [0,1,2,3,4,5].map(i => ({ id: 'p' + i, name: 'P' + i }));
+    const g = E.createGame({ players, champions: NEXUS_CHAMPIONS, seed: 1, now: 0 });
+    E.tick(g, 0);
+    check(!!g.current, 'unit: primeiro campeão deveria estar em disputa');
+    check(E.placeBid(g, 'p0', 50, 10).ok, 'unit: lance inicial R$0,50 deveria valer');
+    check(!E.placeBid(g, 'p1', 50, 20).ok, 'unit: empate deveria ser recusado (vale o primeiro)');
+    check(!E.placeBid(g, 'p0', 100, 30).ok, 'unit: não pode cobrir o próprio lance');
+    check(!E.placeBid(g, 'p1', 75, 40).ok, 'unit: múltiplo de R$0,50 obrigatório');
+    check(!E.placeBid(g, 'p1', 9850, 50).ok, 'unit: acima do máximo (R$98,00) deveria falhar');
+    check(E.placeBid(g, 'p1', 9800, 60).ok, 'unit: exatamente o máximo deveria valer');
+    check(g.current.endsAt === 60 + 10000, 'unit: lance deveria reiniciar o cronômetro');
+    E.tick(g, 60 + 10000);
+    check(E.getPlayer(g, 'p1').budget === 200, 'unit: saldo deveria ser R$2,00 após pagar R$98');
+    if (g.phase === 'routePick') E.tick(g, 60 + 10000 + 10000); // auto-escolha da rota
+    const p1 = E.getPlayer(g, 'p1');
+    check(E.openRoles(p1).length === 4, 'unit: p1 deveria ter 4 vagas');
+    check(E.maxBid(g, 'p1') === 50, 'unit: com R$2 e 4 vagas, máximo = R$0,50');
+    out.push('Regras unitárias verificadas.');
+  }
+
+  // 2) Viabilidade: catálogo impossível deve ser recusado
+  {
+    const bad = NEXUS_CHAMPIONS.map(c => Object.assign({}, c, { routes: c.routes[0] === 'SUPORTE' ? ['MID'] : c.routes }));
+    let threw = false;
+    try { E.createGame({ players: [0,1,2,3,4,5].map(i => ({ id: 'p' + i, name: 'x' })), champions: bad, seed: 1 }); } catch (e) { threw = true; }
+    check(threw, 'viabilidade: catálogo sem suportes deveria ser recusado');
+    out.push('Validação de catálogo verificada.');
+  }
+
+  // 3) Drafts completos
+  const t0 = performance.now();
+  const N = 300;
+  let totalTime = 0, totalBids = 0, maxPrice = 0, freeSum = 0;
+  for (let seed = 1; seed <= N; seed++) {
+    const { g, now } = simulate(seed, 'bots');
+    validate(g, `bots#${seed}`);
+    totalTime += now; totalBids += g.bids.length;
+    freeSum += g.sales.filter(s => s.price === 0).length;
+    g.sales.forEach(s => { maxPrice = Math.max(maxPrice, s.price); });
+  }
+  out.push(`${N} drafts só com bots: duração média ${(totalTime / N / 60000).toFixed(1)} min, ${(totalBids / N).toFixed(0)} lances por draft, ${(freeSum / N).toFixed(1)} campeões grátis por draft, campeão mais caro ${E.formatBRL(maxPrice)}.`);
+
+  let idleTime = 0, idleForced = 0;
+  for (let seed = 1; seed <= 100; seed++) {
+    const { g, now } = simulate(seed, 'idle');
+    validate(g, `idle#${seed}`);
+    idleTime += now;
+    idleForced += g.events.filter(e => e.type === 'forced' || e.type === 'only_option').length;
+    check(g.events.filter(e => e.type === 'requeue').length > 0, `idle#${seed}: deveria ter reenfileirado`);
+  }
+  out.push(`100 drafts com todos AFK: todos completos, média ${(idleTime / 100 / 60000).toFixed(1)} min, ${(idleForced / 100).toFixed(0)} atribuições automáticas.`);
+  out.push(`Tempo de execução: ${(performance.now() - t0).toFixed(0)} ms`);
+
+  out.unshift(failures === 0 ? '<span class="ok">TUDO OK</span>' : `<span class="fail">${failures} FALHA(S)</span>`);
+  document.getElementById('out').innerHTML = out.slice(0, 80).join('\n');
+  window.__testResult = { failures, lines: out };
+})();
+</script>
+</body>
+</html>
