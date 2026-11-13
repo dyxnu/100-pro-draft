@@ -11,10 +11,11 @@ let failures = 0;
 const ok = (cond, msg) => { console.log(`${cond ? '✓' : '✗'} ${msg}`); if (!cond) failures++; };
 
 const { data: champs, error: e1 } = await sb.from('champions').select('id');
-ok(!e1 && champs?.length === 30, `30 campeões no catálogo (${e1 ? e1.message : champs.length})`);
+ok(!e1 && champs?.length >= 36, `catálogo com campeões suficientes para 6 jogadores (${e1 ? e1.message : champs.length})`);
 
 const { data: routes, error: e2 } = await sb.from('champion_routes').select('champion_id, lane, is_primary');
-ok(!e2 && routes?.filter(r => r.is_primary).length === 30, `rotas cadastradas (${e2 ? e2.message : routes.length}, 30 principais)`);
+const primaries = routes?.filter(r => r.is_primary).length ?? 0;
+ok(!e2 && primaries === champs?.length, `cada campeão tem rota principal (${e2 ? e2.message : `${routes.length} rotas, ${primaries} principais`})`);
 
 const { error: e3 } = await sb.from('profiles').select('id').limit(1);
 ok(!e3, `perfis legíveis publicamente${e3 ? ': ' + e3.message : ''}`);

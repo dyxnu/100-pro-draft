@@ -50,7 +50,7 @@ describe.runIf(enabled)('salas no Supabase (integração)', () => {
       res = await svc.performAction(code, host.id, { type: 'tick' }, now);
     }
     expect(res.state?.phase).toBe('finished');
-    expect(res.tournament?.stage).toBe('lineup');
+    expect(res.tournament).toBeTruthy();
 
     const { data: room } = await admin.from('rooms').select('id, status').eq('code', code).single();
     const { data: auction } = await admin.from('auctions').select('id').eq('room_id', room!.id).single();
@@ -62,12 +62,18 @@ describe.runIf(enabled)('salas no Supabase (integração)', () => {
     const late = await svc.performAction(code, host.id, { type: 'bid', amount: 100 }, now + 1000);
     expect(late.ok).toBe(false);
 
-    // Campeonato: o anfitrião troca duas rotas, muda a estratégia e confirma; depois o tempo corre.
-    expect((await svc.performAction(code, host.id, { type: 'lineup_swap', a: 'TOP', b: 'MID' }, now + 2000)).ok).toBe(true);
-    expect((await svc.performAction(code, host.id, { type: 'lineup_swap', a: 'TOP', b: 'MID' }, now + 2500)).ok).toBe(true);
+    // Campeonato. Se o anfitrião (único humano) é cabeça de chave, ele folga e a rodada dos bots
+    // começa sozinha; senão ele troca duas rotas, muda a estratégia e confirma.
     const strat = { agressividade: 'agressiva', prioridade: 'dragoes', estilo: 'teamfight', risco: 'normal' } as const;
-    expect((await svc.performAction(code, host.id, { type: 'strategy', strategy: strat }, now + 3000)).ok).toBe(true);
-    res = await svc.performAction(code, host.id, { type: 'ready', ready: true }, now + 3500);
+    if (res.tournament!.stage === 'lineup') {
+      expect((await svc.performAction(code, host.id, { type: 'lineup_swap', a: 'TOP', b: 'MID' }, now + 2000)).ok).toBe(true);
+      expect((await svc.performAction(code, host.id, { type: 'lineup_swap', a: 'TOP', b: 'MID' }, now + 2500)).ok).toBe(true);
+      expect((await svc.performAction(code, host.id, { type: 'strategy', strategy: strat }, now + 3000)).ok).toBe(true);
+      res = await svc.performAction(code, host.id, { type: 'ready', ready: true }, now + 3500);
+      expect(res.tournament!.stage).toBe('playing');
+    } else {
+      expect(res.tournament!.teams.seat0.seed).toBeLessThanOrEqual(2); // folga: é cabeça de chave
+    }
     now += 4000;
     for (let i = 0; i < 100 && res.tournament?.stage !== 'done'; i++) {
       now += 20_000;
