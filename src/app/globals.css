@@ -1,0 +1,42 @@
+@import "tailwindcss";
+
+/* Identidade visual Nexus Draft (mesma do protótipo) */
+@theme {
+  --color-bg: #070b11;
+  --color-bg2: #0d131c;
+  --color-panel: #111823;
+  --color-panel2: #18212f;
+  --color-line: #233044;
+  --color-text: #ebe7df;
+  --color-muted: #8a94a3;
+  --color-gold: #c8aa6e;
+  --color-gold2: #f0e6d2;
+  --color-teal: #0ac8b9;
+  --color-danger: #e84057;
+  --font-sans: var(--font-inter), system-ui, sans-serif;
+}
+
+:root { color-scheme: dark; }
+
+body {
+  background: radial-gradient(1200px 600px at 50% -200px, #13223a 0%, var(--color-bg) 60%) fixed, var(--color-bg);
+  color: var(--color-text);
+  min-height: 100vh;
+}
+
+@layer components {
+  .panel { @apply rounded-xl border border-line bg-panel; }
+  .btn-primary {
+    @apply inline-flex items-center justify-center rounded-lg px-4 py-2.5 font-bold tracking-wide text-[#1a1408]
+      bg-gradient-to-b from-[#d9bd7f] to-[#a8884d] hover:brightness-110 disabled:opacity-40 disabled:cursor-not-allowed;
+  }
+  .btn-secondary {
+    @apply inline-flex items-center justify-center rounded-lg border border-gold px-4 py-2 font-semibold text-gold2
+      hover:bg-gold/10 disabled:opacity-40 disabled:cursor-not-allowed;
+  }
+  .input {
+    @apply w-full rounded-lg border border-line bg-bg2 px-3 py-2.5 outline-none focus:border-gold focus:ring-1 focus:ring-gold;
+  }
+  .label { @apply mb-1.5 block text-xs uppercase tracking-widest text-muted; }
+  .eyebrow { @apply text-xs font-semibold uppercase tracking-[0.14em] text-gold; }
+}

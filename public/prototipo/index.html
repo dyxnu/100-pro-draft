@@ -1,0 +1,128 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Nexus Draft</title>
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <!-- TELA: início -->
+  <section id="screen-setup" class="screen">
+    <div class="setup-card">
+      <div class="logo">NEXUS<span>DRAFT</span></div>
+      <p class="tagline">R$ 100 fictícios. 30 campeões. 5 rotas. Monte o melhor time.</p>
+      <label class="field">
+        <span>Seu apelido</span>
+        <input id="nick" maxlength="16" placeholder="Invocador" autocomplete="off">
+      </label>
+      <label class="field">
+        <span>Velocidade</span>
+        <select id="speed">
+          <option value="normal">Normal: 10 s por lance</option>
+          <option value="fast">Rápido para testes: 4 s por lance</option>
+        </select>
+      </label>
+      <button id="startBtn" class="btn-primary">Começar draft contra 5 bots</button>
+      <ul class="rules">
+        <li>Cada lance reinicia o cronômetro. Quando ele zera, o maior lance leva o campeão.</li>
+        <li>Você precisa guardar pelo menos R$ 0,50 para cada vaga que ainda falta.</li>
+        <li>Ao vencer, escolha a rota em 10 s. Se não escolher, o sistema escolhe por você.</li>
+        <li>Um campeão sem lances volta para o fim da fila. Se ficar sem lances de novo, é sorteado de graça.</li>
+      </ul>
+      <p class="disclaimer">Protótipo local. O dinheiro é fictício.</p>
+    </div>
+  </section>
+
+  <!-- TELA: leilão -->
+  <section id="screen-auction" class="screen hidden">
+    <header class="topbar">
+      <div class="logo small">NEXUS<span>DRAFT</span></div>
+      <div class="lot-counter" id="lotCounter"></div>
+      <div class="my-budget">Seu saldo <b id="myBudget"></b></div>
+    </header>
+
+    <main class="layout">
+      <section class="stage panel">
+        <div class="stage-art" id="stageArt"></div>
+        <div class="stage-info">
+          <div class="lot-tag" id="lotTag"></div>
+          <h2 id="champName">—</h2>
+          <div class="routes" id="champRoutes"></div>
+
+          <div class="bid-box">
+            <div class="bid-label">Maior lance</div>
+            <div class="bid-amount" id="highAmount">—</div>
+            <div class="bid-leader" id="highLeader"></div>
+          </div>
+
+          <div class="timer"><div class="timer-bar" id="timerBar"></div><span id="timerText"></span></div>
+
+          <div class="controls">
+            <div class="quick">
+              <button class="btn-bid" data-inc="50"></button>
+              <button class="btn-bid" data-inc="100"></button>
+              <button class="btn-bid" data-inc="500"></button>
+              <button class="btn-bid" data-inc="1000"></button>
+            </div>
+            <div class="custom">
+              <span class="prefix">R$</span>
+              <input id="customBid" inputmode="decimal" placeholder="0,00" autocomplete="off">
+              <button id="customBtn" class="btn-secondary">Dar lance</button>
+              <button id="maxBtn" class="btn-secondary">Máx</button>
+            </div>
+          </div>
+          <div class="hint" id="bidHint"></div>
+        </div>
+      </section>
+
+      <section class="panel myteam">
+        <h3>Seu time <small id="myTeamMeta"></small></h3>
+        <div class="slots" id="mySlots"></div>
+      </section>
+
+      <section class="panel players">
+        <h3>Participantes</h3>
+        <div id="playerList"></div>
+      </section>
+
+      <section class="panel pool">
+        <h3>Campeões <small id="poolMeta"></small></h3>
+        <div class="next" id="nextUp"></div>
+        <div class="pool-grid" id="poolGrid"></div>
+      </section>
+
+      <section class="panel log">
+        <h3>Histórico</h3>
+        <ol id="eventLog"></ol>
+      </section>
+    </main>
+
+    <div class="overlay hidden" id="routeOverlay"></div>
+  </section>
+
+  <!-- TELA: resultado -->
+  <section id="screen-results" class="screen hidden">
+    <header class="topbar">
+      <div class="logo small">NEXUS<span>DRAFT</span></div>
+      <div class="lot-counter">Draft encerrado</div>
+      <div></div>
+    </header>
+    <div class="results-wrap">
+      <div class="highlights" id="highlights"></div>
+      <div class="teams" id="teams"></div>
+      <div class="results-actions">
+        <button id="copyBtn" class="btn-secondary">Copiar resultado</button>
+        <button id="againBtn" class="btn-primary">Jogar de novo</button>
+      </div>
+    </div>
+  </section>
+
+  <div class="toast hidden" id="toast"></div>
+
+  <script src="champions.js"></script>
+  <script src="engine.js"></script>
+  <script src="bots.js"></script>
+  <script src="app.js"></script>
+</body>
+</html>

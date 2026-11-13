@@ -1,0 +1,41 @@
+// Catálogo inicial — 30 campeões (6 por rota principal).
+// routes[0] = rota principal; as demais são rotas alternativas permitidas.
+// tier = popularidade (1 a 3), usado só pela "vontade" dos bots de gastar.
+// No projeto final isso vem das tabelas `champions` + `champion_routes`.
+window.NEXUS_CHAMPIONS = [
+  // TOP
+  { id: 'Garen',       name: 'Garen',        routes: ['TOP'],                    tier: 1 },
+  { id: 'Darius',      name: 'Darius',       routes: ['TOP', 'JUNGLE'],          tier: 2 },
+  { id: 'Malphite',    name: 'Malphite',     routes: ['TOP', 'MID', 'SUPORTE'],  tier: 1 },
+  { id: 'Jax',         name: 'Jax',          routes: ['TOP', 'JUNGLE'],          tier: 2 },
+  { id: 'Camille',     name: 'Camille',      routes: ['TOP'],                    tier: 3 },
+  { id: 'Renekton',    name: 'Renekton',     routes: ['TOP', 'MID'],             tier: 2 },
+  // JUNGLE
+  { id: 'Warwick',     name: 'Warwick',      routes: ['JUNGLE', 'TOP'],          tier: 2 },
+  { id: 'Vi',          name: 'Vi',           routes: ['JUNGLE'],                 tier: 2 },
+  { id: 'Amumu',       name: 'Amumu',        routes: ['JUNGLE', 'SUPORTE'],      tier: 1 },
+  { id: 'LeeSin',      name: 'Lee Sin',      routes: ['JUNGLE', 'TOP'],          tier: 3 },
+  { id: 'XinZhao',     name: 'Xin Zhao',     routes: ['JUNGLE'],                 tier: 2 },
+  { id: 'Sejuani',     name: 'Sejuani',      routes: ['JUNGLE', 'TOP'],          tier: 2 },
+  // MID
+  { id: 'Ahri',        name: 'Ahri',         routes: ['MID'],                    tier: 3 },
+  { id: 'Annie',       name: 'Annie',        routes: ['MID', 'SUPORTE'],         tier: 1 },
+  { id: 'Lux',         name: 'Lux',          routes: ['MID', 'SUPORTE'],         tier: 2 },
+  { id: 'Yasuo',       name: 'Yasuo',        routes: ['MID', 'TOP', 'ADC'],      tier: 3 },
+  { id: 'Zed',         name: 'Zed',          routes: ['MID', 'JUNGLE'],          tier: 3 },
+  { id: 'Orianna',     name: 'Orianna',      routes: ['MID'],                    tier: 2 },
+  // ADC
+  { id: 'Ashe',        name: 'Ashe',         routes: ['ADC', 'SUPORTE'],         tier: 2 },
+  { id: 'Jinx',        name: 'Jinx',         routes: ['ADC'],                    tier: 3 },
+  { id: 'Caitlyn',     name: 'Caitlyn',      routes: ['ADC'],                    tier: 2 },
+  { id: 'MissFortune', name: 'Miss Fortune', routes: ['ADC'],                    tier: 2 },
+  { id: 'Kaisa',       name: "Kai'Sa",       routes: ['ADC'],                    tier: 3 },
+  { id: 'Jhin',        name: 'Jhin',         routes: ['ADC'],                    tier: 3 },
+  // SUPORTE
+  { id: 'Soraka',      name: 'Soraka',       routes: ['SUPORTE'],                tier: 1 },
+  { id: 'Leona',       name: 'Leona',        routes: ['SUPORTE'],                tier: 2 },
+  { id: 'Nautilus',    name: 'Nautilus',     routes: ['SUPORTE', 'TOP'],         tier: 2 },
+  { id: 'Lulu',        name: 'Lulu',         routes: ['SUPORTE', 'MID'],         tier: 2 },
+  { id: 'Morgana',     name: 'Morgana',      routes: ['SUPORTE', 'MID', 'JUNGLE'], tier: 2 },
+  { id: 'Thresh',      name: 'Thresh',       routes: ['SUPORTE'],                tier: 3 },
+];
