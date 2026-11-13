@@ -12,6 +12,7 @@ export async function SiteHeader() {
       <div className="mx-auto flex max-w-6xl items-center justify-between gap-4 px-4 py-3 sm:px-6">
         <Link href="/" aria-label="Início"><Logo /></Link>
         <nav className="flex items-center gap-2 text-sm sm:gap-4">
+          <Link href="/campeoes" className="text-muted hover:text-text">Campeões</Link>
           {profile ? (
             <>
               <Link href="/jogar" className="font-semibold text-gold hover:text-gold2">Jogar</Link>

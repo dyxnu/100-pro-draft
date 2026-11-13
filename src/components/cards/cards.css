@@ -1,0 +1,37 @@
+/* Carta estilo FIFA */
+.nx-card {
+  --c1: #4a3a24; --c2: #1d160d; --edge: #c8aa6e; --ink: #f0e6d2;
+  position: relative; display: flex; flex-direction: column; align-items: center;
+  width: 190px; padding: 10px 10px 12px; border-radius: 18px 18px 22px 22px;
+  background: linear-gradient(160deg, var(--c1), var(--c2) 70%);
+  border: 2px solid var(--edge); color: var(--ink); cursor: pointer; text-align: center;
+  box-shadow: 0 10px 30px -12px rgba(0,0,0,.8), inset 0 0 0 1px rgba(255,255,255,.06);
+  transition: transform .15s ease, box-shadow .15s ease;
+}
+.nx-card:hover { transform: translateY(-3px); box-shadow: 0 16px 36px -12px rgba(0,0,0,.9), 0 0 0 1px var(--edge); }
+.nx-card.selected { outline: 3px solid var(--edge); outline-offset: 3px; }
+.nx-card.tier-icone { --c1: #3b2a5e; --c2: #120b22; --edge: #e9d27a; }
+.nx-card.tier-ouro { --c1: #5a4520; --c2: #1d160d; --edge: #d9bd7f; }
+.nx-card.tier-prata { --c1: #3c4654; --c2: #12171e; --edge: #b8c3cf; --ink: #eef2f6; }
+.nx-card.tier-bronze { --c1: #4d3427; --c2: #1a120d; --edge: #b27a55; }
+
+.nx-card-top { position: absolute; top: 12px; left: 12px; display: flex; flex-direction: column; align-items: center; z-index: 2; line-height: 1; text-shadow: 0 2px 4px #000; }
+.nx-ovr { font-size: 34px; font-weight: 900; }
+.nx-role { font-size: 12px; font-weight: 800; letter-spacing: .08em; margin-top: 2px; }
+.nx-class { font-size: 9px; text-transform: uppercase; letter-spacing: .06em; margin-top: 4px; opacity: .85; }
+.nx-art { width: 120px; height: 150px; margin-left: 30px; border-radius: 10px; overflow: hidden; -webkit-mask-image: linear-gradient(#000 75%, transparent); mask-image: linear-gradient(#000 75%, transparent); }
+.nx-art img, .nx-art .img-fallback { width: 100%; height: 100%; object-fit: cover; object-position: top; display: grid; place-items: center; font-size: 40px; }
+.nx-name { font-size: 17px; font-weight: 800; margin-top: 2px; text-transform: uppercase; letter-spacing: .04em; border-bottom: 1px solid color-mix(in srgb, var(--edge) 50%, transparent); padding-bottom: 4px; width: 100%; }
+.nx-attrs { display: grid; grid-template-columns: 1fr 1fr; gap: 2px 14px; margin-top: 6px; font-size: 13px; text-align: left; }
+.nx-attrs b { font-weight: 900; display: inline-block; min-width: 22px; }
+.nx-curve { display: flex; gap: 10px; margin-top: 8px; height: 34px; align-items: flex-end; }
+.nx-curve .bar { width: 26px; height: 100%; display: flex; flex-direction: column; justify-content: flex-end; align-items: center; position: relative; }
+.nx-curve .bar span { width: 10px; background: var(--edge); border-radius: 3px 3px 0 0; opacity: .85; }
+.nx-curve .bar small { position: absolute; bottom: -13px; font-size: 8px; opacity: .7; text-transform: uppercase; }
+
+.nx-card.size-sm { width: 140px; padding: 8px 8px 10px; }
+.nx-card.size-sm .nx-ovr { font-size: 26px; }
+.nx-card.size-sm .nx-art { width: 86px; height: 104px; margin-left: 26px; }
+.nx-card.size-sm .nx-name { font-size: 13px; }
+.nx-card.size-sm .nx-attrs { font-size: 11px; gap: 1px 8px; }
+.nx-card .img-fallback { background: linear-gradient(135deg, #24324a, #121a27); color: var(--color-gold); font-weight: 800; }

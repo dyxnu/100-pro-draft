@@ -4,8 +4,10 @@
 // que não existem nos arquivos oficiais. Os ajustes ficam em CURATED e podem ser balanceados.
 import ddragon from './ddragon.json';
 import type { Role } from '@/lib/auction/engine';
+import type { ChampClass, ChampionCard } from './card-types';
 
-export type ChampClass = 'tanque' | 'lutador' | 'assassino' | 'mago' | 'atirador' | 'encantador';
+export { CLASS_LABEL, cardTier } from './card-types';
+export type { ChampClass, ChampionCard } from './card-types';
 
 export interface Curated {
   cc: number;      // controle de grupo 0–10
@@ -57,27 +59,6 @@ const DEFAULT_CURATED: Curated = { cc: 5, dashes: 1, util: 3, early: 6, mid: 7, 
 const CLASS_BY_TAG: Record<string, ChampClass> = {
   Tank: 'tanque', Fighter: 'lutador', Assassin: 'assassino', Mage: 'mago', Marksman: 'atirador', Support: 'encantador',
 };
-export const CLASS_LABEL: Record<ChampClass, string> = {
-  tanque: 'Tanque', lutador: 'Lutador', assassino: 'Assassino', mago: 'Mago', atirador: 'Atirador', encantador: 'Suporte',
-};
-
-export interface ChampionCard {
-  id: string;
-  name: string;
-  title: string;
-  champClass: ChampClass;
-  tags: string[];
-  attrs: { ATQ: number; MAG: number; DEF: number; MOB: number; CTR: number; UTL: number };
-  curve: { early: number; mid: number; late: number }; // 0–10
-  engage: number;
-  aoe: number;
-  ranged: boolean;
-  difficulty: number;
-  ovr: Record<Role, number>; // overall em cada rota (penalidade fora das rotas permitidas)
-  bestOvr: number;
-  patch: string;
-}
-
 type DD = { version: string; champions: Record<string, { name: string; title: string; tags: string[]; info: { attack: number; defense: number; magic: number; difficulty: number }; stats: { hp: number; armor: number; mr: number; moveSpeed: number; range: number } }> };
 const DATA = ddragon as DD;
 
@@ -133,11 +114,4 @@ export function buildCard(id: string, routes: Role[]): ChampionCard {
     ranged: d.stats.range >= 300, difficulty: d.info.difficulty,
     ovr, bestOvr: Math.max(...Object.values(ovr)), patch: DATA.version,
   };
-}
-
-export function cardTier(ovr: number): 'icone' | 'ouro' | 'prata' | 'bronze' {
-  if (ovr >= 88) return 'icone';
-  if (ovr >= 80) return 'ouro';
-  if (ovr >= 72) return 'prata';
-  return 'bronze';
 }
