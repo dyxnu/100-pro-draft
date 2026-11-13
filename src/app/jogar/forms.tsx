@@ -1,0 +1,47 @@
+'use client';
+
+import { useActionState } from 'react';
+import { createRoomAction, goToRoomAction } from '@/app/sala/actions';
+
+function ErrorText({ error }: { error?: string }) {
+  if (!error) return null;
+  return <p role="alert" className="rounded-lg border border-danger/50 bg-danger/10 px-3 py-2 text-sm text-[#ffd5db]">{error}</p>;
+}
+
+export function CreateRoomForm() {
+  const [state, action, pending] = useActionState(createRoomAction, {});
+  return (
+    <form action={action} className="space-y-4">
+      <label className="flex items-center gap-3 text-sm">
+        <input type="checkbox" name="bots" defaultChecked className="h-4 w-4 accent-[#c8aa6e]" />
+        Completar vagas vazias com bots
+      </label>
+      <label className="block">
+        <span className="label">Velocidade</span>
+        <select name="speed" className="input" defaultValue="normal">
+          <option value="normal">Normal: 10 s por lance</option>
+          <option value="rapido">Rápida: 5 s por lance</option>
+        </select>
+      </label>
+      <ErrorText error={state.error} />
+      <button className="btn-primary w-full" disabled={pending}>{pending ? 'Criando…' : 'Criar sala'}</button>
+    </form>
+  );
+}
+
+export function JoinRoomForm() {
+  const [state, action, pending] = useActionState(goToRoomAction, {});
+  return (
+    <form action={action} className="space-y-4">
+      <label className="block">
+        <span className="label">Código da sala</span>
+        <input
+          name="code" required maxLength={6} autoComplete="off" placeholder="A1B2C3"
+          className="input font-mono text-lg uppercase tracking-[0.3em]"
+        />
+      </label>
+      <ErrorText error={state.error} />
+      <button className="btn-secondary w-full" disabled={pending}>Entrar</button>
+    </form>
+  );
+}

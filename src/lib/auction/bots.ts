@@ -54,7 +54,8 @@ export function stepBots(s: AuctionState, brains: BotBrains, now: number): void 
 
     if (s.phase === 'routePick') {
       const rp = s.routePick!;
-      if (rp.playerId !== p.id) continue;
+      b.nextAt = null; // nada de lances durante a escolha de rota
+      if (rp.playerId !== p.id) { b.routeAt = null; continue; }
       if (b.routeAt == null) b.routeAt = now + 500 + rand() * 900;
       if (now < b.routeAt) continue;
       b.routeAt = null;
@@ -64,7 +65,8 @@ export function stepBots(s: AuctionState, brains: BotBrains, now: number): void 
       chooseRoute(s, p.id, role, now);
       continue;
     }
-    if (s.phase !== 'bidding' || !s.current) continue;
+    b.routeAt = null;
+    if (s.phase !== 'bidding' || !s.current) { b.nextAt = null; continue; }
 
     const key = `${s.current.champId}@${s.current.startedAt}`;
     if (b.lotKey !== key) { b.lotKey = key; b.noise = 0.8 + rand() * 0.4; b.seen = -1; }
@@ -88,6 +90,7 @@ export function stepBots(s: AuctionState, brains: BotBrains, now: number): void 
 
 /** Próximo instante em que algum bot quer agir (para o servidor agendar). */
 export function nextBotAction(s: AuctionState, brains: BotBrains): number | null {
+  if (s.phase === 'finished') return null;
   let best: number | null = null;
   for (const b of Object.values(brains)) {
     for (const t of [b.nextAt, b.routeAt]) if (t != null && (best == null || t < best)) best = t;

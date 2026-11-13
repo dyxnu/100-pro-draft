@@ -18,7 +18,12 @@ const eslintConfig = [
       "out/**",
       "build/**",
       "next-env.d.ts",
+      "public/prototipo/**",
     ],
+  },
+  {
+    // Ícones de campeões vêm do Data Dragon: <img> simples é suficiente.
+    rules: { "@next/next/no-img-element": "off" },
   },
 ];
 

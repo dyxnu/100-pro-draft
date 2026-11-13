@@ -5,6 +5,7 @@ import {
 } from './engine';
 import { createBrains, nextBotAction, stepBots } from './bots';
 import { STARTER_CHAMPIONS } from './champions';
+import { advance, nextWake } from './runner';
 
 const PROFILES = ['agressivo', 'economico', 'equilibrado', 'estrategico', 'equilibrado', 'agressivo'] as const;
 
@@ -102,6 +103,25 @@ describe('drafts completos', () => {
       const { s } = simulate(false, seed);
       expectValidFinal(s);
       expect(s.events.some(e => e.type === 'requeue')).toBe(true);
+    }
+  });
+
+  it('servidor chamado em momentos irregulares chega no mesmo resultado', () => {
+    for (let seed = 1; seed <= 30; seed++) {
+      const exact = simulate(true, seed).s;
+      const s = newGame(true, seed);
+      const brains = createBrains(s);
+      let now = 0;
+      let calls = 0;
+      while (s.phase !== 'finished' && calls++ < 50_000) {
+        now += Math.floor(((seed * 7919 + calls * 104729) % 15_000)); // "cutucadas" atrasadas e irregulares
+        advance(s, brains, now);
+      }
+      expectValidFinal(s);
+      expect(s.sales.map(x => [x.champId, x.playerId, x.price, x.role])).toEqual(
+        exact.sales.map(x => [x.champId, x.playerId, x.price, x.role]),
+      );
+      expect(nextWake(s, brains)).toBeNull();
     }
   });
 

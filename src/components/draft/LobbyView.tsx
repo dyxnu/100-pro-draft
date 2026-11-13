@@ -1,0 +1,147 @@
+'use client';
+
+import { useEffect, useState, useTransition } from 'react';
+import { useRouter } from 'next/navigation';
+import { getBrowserClient } from '@/lib/supabase/client';
+import type { MemberRow, RoomRow, RoomSpeed } from '@/lib/rooms/types';
+import { ROOM_SIZE } from '@/lib/rooms/types';
+import {
+  joinRoomAction, leaveRoomAction, startDraftAction, updateSettingsAction, type RoomFormState,
+} from '@/app/sala/actions';
+import { SEAT_COLORS } from './ui';
+
+export function LobbyView({ room, members, meId, isMember }: {
+  room: RoomRow; members: MemberRow[]; meId: string; isMember: boolean;
+}) {
+  const router = useRouter();
+  const [pending, startTransition] = useTransition();
+  const [error, setError] = useState<string>();
+  const [online, setOnline] = useState<Set<string>>(new Set());
+  const [copied, setCopied] = useState(false);
+  const isHost = room.host_id === meId;
+  const humans = members.filter(m => m.user_id).length;
+  const free = ROOM_SIZE - members.length;
+  const canStart = free === 0 || room.bots_enabled;
+
+  // Tempo real: qualquer mudança na sala ou nos membros recarrega a página (do servidor).
+  useEffect(() => {
+    const sb = getBrowserClient();
+    const channel = sb.channel(`sala:${room.id}`, { config: { presence: { key: meId } } })
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'room_members', filter: `room_id=eq.${room.id}` }, () => router.refresh())
+      .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'rooms', filter: `id=eq.${room.id}` }, () => router.refresh())
+      .on('presence', { event: 'sync' }, () => setOnline(new Set(Object.keys(channel.presenceState()))))
+      .subscribe((status: string) => { if (status === 'SUBSCRIBED') channel.track({ at: Date.now() }); });
+    return () => { sb.removeChannel(channel); };
+  }, [room.id, meId, router]);
+
+  const run = (fn: () => Promise<RoomFormState>) => startTransition(async () => {
+    setError(undefined);
+    const r = await fn();
+    if (r?.error) setError(r.error);
+    else router.refresh();
+  });
+
+  const [origin, setOrigin] = useState('');
+  useEffect(() => setOrigin(window.location.origin), []);
+  const inviteUrl = `${origin}/sala/${room.code}`;
+  const copy = async () => {
+    try { await navigator.clipboard.writeText(inviteUrl); setCopied(true); setTimeout(() => setCopied(false), 1800); } catch { /* ignora */ }
+  };
+
+  return (
+    <div className="mt-8 space-y-5">
+      <section className="panel flex flex-col gap-4 p-6 sm:flex-row sm:items-center sm:justify-between">
+        <div>
+          <p className="eyebrow">Lobby · casual</p>
+          <h1 className="mt-1 text-3xl font-bold text-gold2">
+            Sala <span className="font-mono tracking-[0.2em]">{room.code}</span>
+          </h1>
+          <p className="mt-1 text-sm text-muted">
+            {humans} jogador(es) · {free} vaga(s) livre(s) · {room.speed === 'rapido' ? '5 s' : '10 s'} por lance
+          </p>
+        </div>
+        <div className="flex flex-col gap-2 sm:items-end">
+          <button onClick={copy} className="btn-secondary">{copied ? 'Link copiado!' : 'Copiar link de convite'}</button>
+          <span className="max-w-full truncate text-xs text-muted">{inviteUrl}</span>
+        </div>
+      </section>
+
+      <section className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+        {[...Array(ROOM_SIZE).keys()].map(seat => {
+          const m = members.find(x => x.seat === seat);
+          const color = SEAT_COLORS[seat];
+          if (!m) {
+            return (
+              <div key={seat} className="rounded-xl border border-dashed border-line bg-bg2 p-4 text-sm text-muted">
+                Vaga {seat + 1} · {room.bots_enabled ? 'um bot entra aqui se ninguém vier' : 'aguardando jogador'}
+              </div>
+            );
+          }
+          const isOnline = m.user_id ? online.has(m.user_id) : true;
+          return (
+            <div key={seat} className="panel flex items-center gap-3 border-l-4 p-4" style={{ borderLeftColor: color }}>
+              <span className="grid h-10 w-10 place-items-center rounded-full bg-panel2 font-bold" style={{ color }}>
+                {m.display_name.slice(0, 1).toUpperCase()}
+              </span>
+              <div className="min-w-0 flex-1">
+                <p className="truncate font-semibold">
+                  {m.display_name}
+                  {m.user_id === meId && <span className="ml-2 text-xs text-muted">(você)</span>}
+                </p>
+                <p className="text-xs text-muted">
+                  {m.user_id === room.host_id ? 'Dono da sala · ' : ''}
+                  {m.user_id ? (isOnline ? 'online' : 'desconectado') : 'bot'}
+                </p>
+              </div>
+              <span className={`h-2.5 w-2.5 rounded-full ${isOnline ? 'bg-teal' : 'bg-line'}`} />
+            </div>
+          );
+        })}
+      </section>
+
+      <section className="panel space-y-4 p-6">
+        {!isMember ? (
+          <>
+            <p className="text-muted">Você foi convidado para esta sala.</p>
+            <button className="btn-primary" disabled={pending || free === 0} onClick={() => run(() => joinRoomAction(room.code))}>
+              {free === 0 ? 'Sala cheia' : 'Entrar na sala'}
+            </button>
+          </>
+        ) : (
+          <div className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
+            {isHost ? (
+              <div className="flex flex-wrap items-center gap-4 text-sm">
+                <label className="flex items-center gap-2">
+                  <input
+                    type="checkbox" checked={room.bots_enabled} disabled={pending}
+                    onChange={e => run(() => updateSettingsAction(room.code, { botsEnabled: e.target.checked }))}
+                    className="h-4 w-4 accent-[#c8aa6e]"
+                  />
+                  Completar com bots
+                </label>
+                <select
+                  className="input !w-auto !py-1.5" value={room.speed} disabled={pending}
+                  onChange={e => run(() => updateSettingsAction(room.code, { speed: e.target.value as RoomSpeed }))}
+                >
+                  <option value="normal">10 s por lance</option>
+                  <option value="rapido">5 s por lance</option>
+                </select>
+              </div>
+            ) : (
+              <p className="text-sm text-muted">Aguardando o dono da sala iniciar o draft…</p>
+            )}
+            <div className="flex gap-2">
+              <button className="btn-secondary" disabled={pending} onClick={() => run(() => leaveRoomAction(room.code))}>Sair</button>
+              {isHost && (
+                <button className="btn-primary px-6" disabled={pending || !canStart} onClick={() => run(() => startDraftAction(room.code))}>
+                  {pending ? 'Aguarde…' : canStart ? 'Iniciar draft' : `Faltam ${free}`}
+                </button>
+              )}
+            </div>
+          </div>
+        )}
+        {error && <p role="alert" className="rounded-lg border border-danger/50 bg-danger/10 px-3 py-2 text-sm text-[#ffd5db]">{error}</p>}
+      </section>
+    </div>
+  );
+}

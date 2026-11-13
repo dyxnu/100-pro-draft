@@ -9,9 +9,9 @@ const STEPS = [
 ];
 
 const ROADMAP = [
-  { t: 'Contas e perfis', s: 'agora' },
-  { t: 'Salas com amigos e bots', s: 'próximo' },
-  { t: 'Leilão em tempo real', s: 'próximo' },
+  { t: 'Contas e perfis', s: 'pronto' },
+  { t: 'Salas com amigos e bots', s: 'pronto' },
+  { t: 'Leilão em tempo real', s: 'pronto' },
   { t: 'Histórico e compartilhamento', s: 'em breve' },
   { t: 'Simulador de partidas', s: 'em breve' },
   { t: 'Ranked, MD10 e temporadas', s: 'em breve' },
@@ -29,14 +29,12 @@ export default async function Home() {
           leilão contra seus amigos e prove quem entende de draft.
         </p>
         <div className="mt-8 flex flex-wrap justify-center gap-3">
-          <a href="/prototipo/index.html" className="btn-primary px-6">Jogar contra bots</a>
-          {session ? (
-            <Link href="/perfil" className="btn-secondary px-6">Meu perfil</Link>
-          ) : (
-            <Link href="/cadastro" className="btn-secondary px-6">Criar conta</Link>
-          )}
+          <Link href={session ? '/jogar' : '/cadastro'} className="btn-primary px-6">
+            {session ? 'Jogar com amigos' : 'Criar conta e jogar'}
+          </Link>
+          <a href="/prototipo/index.html" className="btn-secondary px-6">Treinar contra bots</a>
         </div>
-        <p className="mt-3 text-xs text-muted">Por enquanto o modo contra bots roda direto no seu navegador.</p>
+        <p className="mt-3 text-xs text-muted">O treino roda direto no seu navegador, sem precisar de conta.</p>
       </section>
 
       <section className="grid gap-4 sm:grid-cols-3">
@@ -55,7 +53,7 @@ export default async function Home() {
           {ROADMAP.map(r => (
             <li key={r.t} className="flex items-center justify-between gap-3 rounded-lg border border-line bg-bg2 px-3 py-2 text-sm">
               <span>{r.t}</span>
-              <span className={`text-xs font-semibold ${r.s === 'agora' ? 'text-teal' : 'text-muted'}`}>{r.s}</span>
+              <span className={`text-xs font-semibold ${r.s === 'pronto' ? 'text-teal' : 'text-muted'}`}>{r.s}</span>
             </li>
           ))}
         </ul>

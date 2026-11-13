@@ -14,6 +14,7 @@ export async function SiteHeader() {
         <nav className="flex items-center gap-2 text-sm sm:gap-4">
           {profile ? (
             <>
+              <Link href="/jogar" className="font-semibold text-gold hover:text-gold2">Jogar</Link>
               <Link href="/perfil" className="flex items-center gap-2 rounded-lg px-2 py-1 hover:bg-panel2">
                 <span className="grid h-7 w-7 place-items-center rounded-full bg-panel2 text-xs font-bold text-gold">
                   {profile.username.slice(0, 1).toUpperCase()}

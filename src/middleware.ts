@@ -2,7 +2,7 @@ import { NextResponse, type NextRequest } from 'next/server';
 import { createServerClient } from '@supabase/ssr';
 import { SUPABASE_ANON_KEY, SUPABASE_URL, isSupabaseConfigured } from '@/lib/supabase/env';
 
-const PROTECTED = ['/perfil'];
+const PROTECTED = ['/perfil', '/jogar', '/sala'];
 
 // Renova a sessão do Supabase em toda navegação e protege rotas que exigem login.
 export async function middleware(request: NextRequest) {
