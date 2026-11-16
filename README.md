@@ -1,4 +1,4 @@
-# Nexus Draft
+# 100 pro Draft
 
 Leilão de campeões de League of Legends com R$ 100 fictícios. Projeto em Next.js + TypeScript + Supabase.
 

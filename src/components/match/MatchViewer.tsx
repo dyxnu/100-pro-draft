@@ -3,7 +3,7 @@
 import { useEffect, useId, useMemo, useRef, useState } from 'react';
 import { ROLES, type Role } from '@/lib/auction/engine';
 import {
-  type Lane, type Pt, type Side, BARON_PIT, DRAGON_PIT, LANES, LANE_PATH, NEXUS,
+  type Lane, type Pt, type Side, BARON_PIT, DRAGON_PIT, LANES, MINIMAP_URL, NEXUS,
   inhibPos, nexusTowerPos, towerPos,
 } from '@/lib/match/map';
 import type { MatchResult, PlayerKey } from '@/lib/match/sim';
@@ -103,31 +103,25 @@ export function MatchViewer({ result, sides, syncStart, syncSpeed = 20, serverNo
                 <clipPath key={k} id={`${uid}-c-${k}`}><circle r="2.3" cx="0" cy="0" /></clipPath>
               ))}
             </defs>
-            <rect width="100" height="100" fill="#0b1510" />
-            <path d="M0 100 L0 70 Q20 80 30 100 Z" fill={sides[0].color} opacity=".12" />
-            <path d="M100 0 L100 30 Q80 20 70 0 Z" fill={sides[1].color} opacity=".12" />
-            <path d="M4 4 L96 96" stroke="#16384d" strokeWidth="7" strokeLinecap="round" opacity=".8" />
-            {LANES.map(l => (
-              <polyline key={l} points={LANE_PATH[l].map(p => `${p.x},${p.y}`).join(' ')} fill="none" stroke="#2c3b2f" strokeWidth="3.4" strokeLinejoin="round" strokeLinecap="round" />
-            ))}
-            <circle cx={BARON_PIT.x} cy={BARON_PIT.y} r="3.2" fill="#3b2357" stroke="#9b7dff" strokeWidth=".4" />
-            <circle cx={DRAGON_PIT.x} cy={DRAGON_PIT.y} r="3.2" fill="#4a2a17" stroke="#ff9f43" strokeWidth=".4" />
+            {/* Minimapa oficial de Summoner's Rift (Data Dragon) */}
+            <image href={MINIMAP_URL} x="0" y="0" width="100" height="100" preserveAspectRatio="none" />
+            <rect width="100" height="100" fill="#000" opacity=".12" />
+            {/* Barão e dragão: brilham quando estão vivos no mapa */}
+            <EpicMarker at={BARON_PIT} color="#b07cff" alive={!past.some(e => e.type === 'baron' && t - e.t < 360)} />
+            <EpicMarker at={DRAGON_PIT} color="#ff9f43" alive={!past.some(e => e.type === 'dragon' && t - e.t < 300)} />
             {([0, 1] as Side[]).map(s => (
               <g key={s}>
-                {LANES.map(l => [0, 1, 2].map(tier => {
-                  const p = towerPos(s, l, tier);
-                  return <rect key={`${l}${tier}`} x={p.x - 1.1} y={p.y - 1.1} width="2.2" height="2.2" rx=".3" fill={sides[s].color} opacity={destroyed(s, l, tier) ? 0.15 : 0.95} />;
-                }))}
+                {LANES.map(l => [0, 1, 2].map(tier => (
+                  <Turret key={`${l}${tier}`} at={towerPos(s, l, tier)} color={sides[s].color} down={destroyed(s, l, tier)} />
+                )))}
                 {LANES.map(l => {
                   const p = inhibPos(s, l);
-                  return <circle key={`i${l}`} cx={p.x} cy={p.y} r="1.3" fill="none" stroke={sides[s].color} strokeWidth=".6" opacity={inhibDown(s, l) ? 0.15 : 0.9} />;
+                  const down = inhibDown(s, l);
+                  return <circle key={`i${l}`} cx={p.x} cy={p.y} r="1.25" fill={down ? '#2a2a2a' : '#0d1520'} stroke={down ? '#555' : sides[s].color} strokeWidth=".55" />;
                 })}
-                {[0, 1].map(i => {
-                  const p = nexusTowerPos(s, i);
-                  return <rect key={`n${i}`} x={p.x - 1} y={p.y - 1} width="2" height="2" fill={sides[s].color} opacity={nexusTowersDown(s) > i ? 0.15 : 0.95} />;
-                })}
-                <rect x={NEXUS[s].x - 2.4} y={NEXUS[s].y - 2.4} width="4.8" height="4.8" transform={`rotate(45 ${NEXUS[s].x} ${NEXUS[s].y})`}
-                  fill={sides[s].color} opacity={finished && result.winner !== s ? 0.15 : 0.9} />
+                {[0, 1].map(i => <Turret key={`n${i}`} at={nexusTowerPos(s, i)} color={sides[s].color} down={nexusTowersDown(s) > i} />)}
+                <rect x={NEXUS[s].x - 2.1} y={NEXUS[s].y - 2.1} width="4.2" height="4.2" transform={`rotate(45 ${NEXUS[s].x} ${NEXUS[s].y})`}
+                  fill={finished && result.winner !== s ? '#2a2a2a' : sides[s].color} stroke="#0b0f14" strokeWidth=".5" />
               </g>
             ))}
             {flashes.map((e, i) => (
@@ -140,10 +134,11 @@ export function MatchViewer({ result, sides, syncStart, syncSpeed = 20, serverNo
               const champ = sides[s].champs[k.slice(2) as Role];
               const dead = isDeadAt(deaths, k, t);
               return (
-                <g key={k} transform={`translate(${p.x} ${p.y})`} opacity={dead ? 0.3 : 1}>
+                <g key={k} transform={`translate(${p.x} ${p.y})`} opacity={dead ? 0 : 1} className="champ-dot">
                   <title>{`${champ.name} (${ROLE_LABEL[k.slice(2) as Role]})`}</title>
-                  <circle r="2.8" fill={sides[s].color} />
+                  <circle r="2.75" fill="#0b0f14" />
                   <image href={icon(champ.id)} x="-2.3" y="-2.3" width="4.6" height="4.6" clipPath={`url(#${uid}-c-${k})`} />
+                  <circle r="2.45" fill="none" stroke={sides[s].color} strokeWidth=".55" />
                 </g>
               );
             })}
@@ -180,6 +175,24 @@ export function MatchViewer({ result, sides, syncStart, syncSpeed = 20, serverNo
         </div>
       </div>
     </div>
+  );
+}
+
+/** Ícone de torre do minimapa (escudo com a cor do time; cinza quando destruída). */
+function Turret({ at, color, down }: { at: Pt; color: string; down: boolean }) {
+  return (
+    <g transform={`translate(${at.x} ${at.y})`}>
+      <path d="M-1 -1.25 H1 V0.35 L0 1.35 L-1 0.35 Z" fill={down ? '#2a2a2a' : color} stroke="#0b0f14" strokeWidth=".35" opacity={down ? 0.7 : 1} />
+    </g>
+  );
+}
+
+function EpicMarker({ at, color, alive }: { at: Pt; color: string; alive: boolean }) {
+  return (
+    <g transform={`translate(${at.x} ${at.y})`} opacity={alive ? 1 : 0.25}>
+      {alive && <circle r="3" fill={color} opacity=".18" className="epic-glow" />}
+      <circle r="1.3" fill="#0b0f14" stroke={color} strokeWidth=".5" />
+    </g>
   );
 }
 

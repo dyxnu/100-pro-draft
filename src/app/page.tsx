@@ -1,70 +1,73 @@
 import Link from 'next/link';
-import { Logo } from '@/components/Logo';
 import { getCurrentUser } from '@/lib/supabase/server';
+import { getCatalog } from '@/lib/champions/catalog';
+import { buildCard } from '@/lib/champions/cards';
+import { Showcase, type ShowcaseChamp } from '@/components/home/Showcase';
 import { TrainButton } from './jogar/forms';
 
 const STEPS = [
-  { n: '01', t: 'R$ 100 fictícios', d: 'Todo mundo começa com o mesmo orçamento. Ninguém sai com saldo para gastar fora do jogo.' },
-  { n: '02', t: 'Leilão campeão a campeão', d: '30 campeões em ordem aleatória. Cada lance reinicia o cronômetro de 10 segundos.' },
-  { n: '03', t: 'Cinco rotas', d: 'Top, Jungle, Mid, ADC e Suporte. Rotas flexíveis, e o sistema nunca deixa um time travar.' },
-];
-
-const ROADMAP = [
-  { t: 'Contas e perfis', s: 'pronto' },
-  { t: 'Salas com amigos e bots', s: 'pronto' },
-  { t: 'Leilão em tempo real', s: 'pronto' },
-  { t: 'Histórico e compartilhamento', s: 'em breve' },
-  { t: 'Simulador de partidas', s: 'em breve' },
-  { t: 'Ranked, MD10 e temporadas', s: 'em breve' },
+  { n: '1', t: 'Dê o lance', d: 'Cada campeão fica 10 segundos em leilão. Todo lance garante pelo menos 3 segundos no relógio.' },
+  { n: '2', t: 'Monte as 5 rotas', d: 'Top, Jungle, Mid, ADC e Suporte. Guarde R$ 1 por vaga: sobrou dinheiro, sobrou.' },
+  { n: '3', t: 'Dispute a taça', d: 'Mata-mata no Summoner’s Rift: escale, escolha a estratégia e mude a tática ao vivo.' },
 ];
 
 export default async function Home() {
-  const session = await getCurrentUser();
+  const [session, catalog] = await Promise.all([getCurrentUser(), getCatalog()]);
+  const champs: ShowcaseChamp[] = catalog.map(c => {
+    const card = buildCard(c.id, c.routes);
+    return { id: c.id, name: card.name, title: card.title, roles: card.roles, routes: c.routes };
+  });
+  const ordered = [...champs.filter(c => c.id === 'Diana'), ...champs.filter(c => c.id !== 'Diana').sort(() => Math.random() - 0.5)];
 
   return (
     <>
-      <section className="py-16 text-center sm:py-24">
-        <Logo size="lg" />
-        <p className="mx-auto mt-5 max-w-xl text-lg text-muted">
-          Monte o melhor time com apenas <b className="text-gold2">R$ 100 fictícios</b>. Dispute os campeões em
-          leilão contra seus amigos e prove quem entende de draft.
-        </p>
-        <div className="mt-8 flex flex-wrap justify-center gap-3">
-          <Link href={session ? '/jogar' : '/cadastro'} className="btn-primary px-6">
-            {session ? 'Jogar com amigos' : 'Criar conta e jogar'}
-          </Link>
-          {session
-            ? <TrainButton className="btn-secondary px-6" />
-            : <Link href="/entrar?next=/jogar" className="btn-secondary px-6">Treinar contra bots</Link>}
+      <section className="mt-8 grid items-center gap-8 md:grid-cols-[minmax(0,380px)_1fr] md:gap-12">
+        <Showcase
+          champs={ordered}
+          stats={[
+            { v: 'R$ 100', k: 'Mesmo orçamento' },
+            { v: `${Math.min(36, catalog.length)}`, k: `Sorteados entre ${catalog.length}` },
+            { v: '6', k: 'Jogadores por sala' },
+          ]}
+        />
+        <div className="anim-fade-up">
+          <p className="eyebrow">Monte. Dispute. Conquiste.</p>
+          <h1 className="mt-3 text-4xl font-black leading-tight text-gold2 sm:text-5xl">Seu próximo time começa no leilão.</h1>
+          <p className="mt-4 max-w-lg text-lg text-muted">
+            Dispute cada campeão com R$ 100 fictícios, feche as cinco rotas e leve sua equipe até a taça no Summoner’s Rift.
+          </p>
+          <div className="mt-7 grid max-w-md gap-3">
+            {session ? (
+              <>
+                <Link href="/jogar" className="btn-primary py-3 text-base">Criar sala →</Link>
+                <div className="grid grid-cols-2 gap-3">
+                  <Link href="/jogar#codigo" className="btn-secondary">Entrar com código</Link>
+                  <TrainButton className="btn-secondary w-full" />
+                </div>
+              </>
+            ) : (
+              <>
+                <Link href="/cadastro" className="btn-primary py-3 text-base">Criar conta e jogar →</Link>
+                <div className="grid grid-cols-2 gap-3">
+                  <Link href="/entrar" className="btn-secondary">Fazer login</Link>
+                  <Link href="/entrar?next=/jogar" className="btn-secondary">Treinar contra bots</Link>
+                </div>
+              </>
+            )}
+          </div>
+          <p className="mt-4 text-sm text-muted">Sem dinheiro real. Times de 5, mata-mata e táticas ao vivo.</p>
         </div>
-        <p className="mt-3 text-xs text-muted">Leilão, escalação e campeonato no mini-mapa, contra 5 bots, começando na hora.</p>
       </section>
 
-      <section className="grid gap-4 sm:grid-cols-3">
+      <section id="como-jogar" className="mt-16 grid gap-4 sm:grid-cols-3">
         {STEPS.map(s => (
           <div key={s.n} className="panel p-5">
-            <p className="text-sm font-bold text-gold">{s.n}</p>
-            <h2 className="mt-1 text-lg font-bold text-gold2">{s.t}</h2>
-            <p className="mt-2 text-sm text-muted">{s.d}</p>
+            <span className="grid h-9 w-9 place-items-center rounded-full bg-moon text-lg font-black text-accent">{s.n}</span>
+            <h2 className="mt-3 text-lg font-black text-gold2">{s.t}</h2>
+            <p className="mt-1 text-sm text-muted">{s.d}</p>
           </div>
         ))}
       </section>
-
-      <section className="panel mt-6 p-6">
-        <h2 className="eyebrow">Roadmap</h2>
-        <ul className="mt-4 grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
-          {ROADMAP.map(r => (
-            <li key={r.t} className="flex items-center justify-between gap-3 rounded-lg border border-line bg-bg2 px-3 py-2 text-sm">
-              <span>{r.t}</span>
-              <span className={`text-xs font-semibold ${r.s === 'pronto' ? 'text-teal' : 'text-muted'}`}>{r.s}</span>
-            </li>
-          ))}
-        </ul>
-      </section>
-
-      <p className="mt-10 text-center text-xs text-muted">
-        Nexus Draft é um projeto de fãs, sem afiliação com a Riot Games. League of Legends e seus campeões são marcas da Riot Games, Inc.
-      </p>
     </>
   );
 }

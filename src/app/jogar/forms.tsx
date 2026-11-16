@@ -15,7 +15,7 @@ export function TrainButton({ className = 'btn-secondary w-full' }: { className?
 
 function ErrorText({ error }: { error?: string }) {
   if (!error) return null;
-  return <p role="alert" className="rounded-lg border border-danger/50 bg-danger/10 px-3 py-2 text-sm text-[#ffd5db]">{error}</p>;
+  return <p role="alert" className="alert-error">{error}</p>;
 }
 
 export function CreateRoomForm() {
@@ -23,7 +23,7 @@ export function CreateRoomForm() {
   return (
     <form action={action} className="space-y-4">
       <label className="flex items-center gap-3 text-sm">
-        <input type="checkbox" name="bots" defaultChecked className="h-4 w-4 accent-[#c8aa6e]" />
+        <input type="checkbox" name="bots" defaultChecked className="h-4 w-4 accent-[#4c4fb5]" />
         Completar vagas vazias com bots
       </label>
       <label className="block">

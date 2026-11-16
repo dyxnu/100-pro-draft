@@ -14,7 +14,7 @@ import type { TournamentState } from '@/lib/tournament/engine';
 import { buildCard, CLASS_LABEL } from '@/lib/champions/cards';
 import { TournamentView } from '@/components/tournament/TournamentView';
 import { ChampImg, HOW_LABEL, ROLE_LABEL, ROLE_SHORT, seatColor } from './ui';
-import './draft.css';
+import './auction.css';
 
 interface Snapshot { state: AuctionState; tournament: TournamentState | null; nextTickAt: number | null }
 // Ordem das versões: leilão primeiro, depois campeonato (para descartar mensagens antigas).
@@ -33,7 +33,6 @@ export function AuctionView({ code, roomId, initialState, initialTournament, ini
   const [snap, setSnap] = useState<Snapshot>({ state: initialState, tournament: initialTournament, nextTickAt: initialNextTickAt });
   const [pending, setPending] = useState(false);
   const [toast, setToast] = useState<string | null>(null);
-  const [custom, setCustom] = useState('');
   const offset = useRef(0); // relógio do servidor = Date.now() + offset
   useEffect(() => { offset.current = serverNow - Date.now(); }, [serverNow]);
   const serverTime = useCallback(() => Date.now() + offset.current, []);
@@ -111,136 +110,212 @@ export function AuctionView({ code, roomId, initialState, initialTournament, ini
         {snap.tournament
           ? <TournamentView s={s} t={snap.tournament} me={me} act={act} pending={pending} serverTime={serverTime} auctionSummary={<Results s={s} me={me} />} />
           : <Results s={s} me={me} />}
-        {toast && <div className="nx-draft"><div className="toast" role="alert">{toast}</div></div>}
+        {toast && <div className="ad-toast" role="alert">{toast}</div>}
       </>
     );
   }
 
+  return <AuctionStage s={s} me={me} act={act} pending={pending} serverTime={serverTime} code={code} toast={toast} />;
+}
+
+/** A tela do leilão (sem rede): recebe o estado e envia intenções por act(). */
+export function AuctionStage({ s, me, act, pending, serverTime, code, toast }: {
+  s: AuctionState; me: string | null; act: (a: ClientAction) => void; pending: boolean;
+  serverTime: () => number; code: string; toast: string | null;
+}) {
   const cur = s.current;
   const rp = s.routePick;
   const lastPlaced = [...s.events].reverse().find((e): e is Extract<AuctionEvent, { type: 'placed' }> => e.type === 'placed');
-  const stageId = cur?.champId ?? rp?.champId ?? lastPlaced?.champId ?? null;
-  const champ = stageId ? s.champions[stageId] : null;
   const mine = me ? getPlayer(s, me) : null;
+  const others = s.players.filter(p => p.id !== me);
 
   return (
-    <div className="nx-draft">
-      <div className="topline">
-        <span>Sala <b className="font-mono">{code}</b> · {s.sales.length} de {Object.keys(s.champions).length} campeões definidos</span>
-        {mine ? <span>Seu saldo <b className="money-lg">{fmt(mine.budget)}</b></span> : <span>Assistindo</span>}
+    <div className="ad">
+      <div className="ad-top">
+        <span className="ad-pill">{cur ? `Campeão ${cur.index} de ${s.totalLots}` : rp ? 'Escolhendo a rota…' : 'Próximo campeão…'}</span>
+        <span className="ad-room">Sala <b>{code}</b> · {s.sales.length}/{s.players.length * 5} vagas preenchidas</span>
       </div>
 
-      <div className="layout">
-        <section className="stage panel-d">
-          <div className={`stage-art ${cur?.highBid ? 'has-bid' : ''}`} key={`${stageId}-${cur?.highBid?.seq ?? 0}`}>
-            {champ && <ChampImg key={champ.id} id={champ.id} name={champ.name} big />}
-          </div>
-          <div className="stage-info">
-            <StageHeader s={s} me={me} lastPlaced={lastPlaced} />
-            {cur ? (
-              <Timer endsAt={cur.endsAt} total={s.config.bidTimeMs} now={serverTime} />
-            ) : rp ? (
-              <Timer endsAt={rp.deadline} total={s.config.routePickMs} now={serverTime} label="Escolha de rota" />
-            ) : (
-              <div className="timer"><span>Próximo campeão…</span></div>
-            )}
-            {me && s.current && <BidControls key={s.current.champId} s={s} me={me} pending={pending} act={act} custom={custom} setCustom={setCustom} />}
-          </div>
+      <div className="ad-grid">
+        <aside className="ad-left">
+          {mine ? <MyPanel s={s} meId={mine.id} /> : <div className="ad-box muted">Você está assistindo este leilão.</div>}
+          <RecentBids s={s} />
+        </aside>
+
+        <section className="ad-center">
+          <LotCard s={s} me={me} lastPlaced={lastPlaced} now={serverTime} />
+          {me && cur && <BidBar key={cur.champId} s={s} me={me} pending={pending} act={act} />}
         </section>
 
-        {mine && <MyTeam s={s} meId={mine.id} />}
-        <Players s={s} me={me} />
-        <Pool s={s} />
-        <Log s={s} />
+        <aside className="ad-right">
+          <div className="ad-head"><h3>Outros jogadores</h3><small>{s.players.length} na sala</small></div>
+          {others.map(p => <PlayerRow key={p.id} s={s} pid={p.id} />)}
+          <LastSold s={s} />
+        </aside>
       </div>
 
       {me && rp && s.phase === 'routePick' && rp.playerId === me && (
         <RouteModal s={s} pending={pending} now={serverTime} onPick={role => act({ type: 'route', role })} />
       )}
-      {toast && <div className="toast" role="alert">{toast}</div>}
+      {toast && <div className="ad-toast" role="alert">{toast}</div>}
     </div>
   );
 }
 
 // ---------------------------------------------------------------------------
-function StageHeader({ s, me, lastPlaced }: {
-  s: AuctionState; me: string | null; lastPlaced?: Extract<AuctionEvent, { type: 'placed' }>;
-}) {
-  const cur = s.current, rp = s.routePick;
-  const id = cur?.champId ?? rp?.champId ?? lastPlaced?.champId;
-  if (!id) return <h2 className="champ-name">Preparando…</h2>;
-  const champ = s.champions[id];
-  const myValid = cur && me ? validRoles(s, me, id) : null;
-  const card = s.config.showOverall !== false ? buildCard(champ.id, champ.routes) : null;
-  const name = (pid: string) => getPlayer(s, pid)?.name ?? '?';
-
-  let tag: React.ReactNode = '', amount = '—', leader: React.ReactNode = '';
-  if (cur) {
-    tag = <>Campeão {cur.index} de {s.totalLots}{cur.passes.length > 0 && <span className="warn"> · {cur.passes.length} passaram</span>}</>;
-    if (cur.highBid) {
-      amount = fmt(cur.highBid.amount);
-      leader = <>liderando: <b style={{ color: seatColor(cur.highBid.playerId) }}>{name(cur.highBid.playerId)}</b> · {cur.bidCount} lance{cur.bidCount > 1 ? 's' : ''}</>;
-    } else {
-      amount = fmt(s.config.minBid);
-      leader = 'Nenhum lance ainda. Esse é o lance inicial.';
-    }
-  } else if (rp) {
-    tag = 'Arrematado';
-    amount = fmt(rp.price);
-    leader = <><b style={{ color: seatColor(rp.playerId) }}>{name(rp.playerId)}</b> está escolhendo a rota…</>;
-  } else if (lastPlaced) {
-    tag = lastPlaced.via === 'sobra' ? 'Sobra (grátis)' : 'Vendido';
-    amount = fmt(lastPlaced.price);
-    leader = <><b style={{ color: seatColor(lastPlaced.playerId) }}>{name(lastPlaced.playerId)}</b> · {ROLE_LABEL[lastPlaced.role]}</>;
-  }
-
+// Coluna da esquerda: meu time
+// ---------------------------------------------------------------------------
+function MyPanel({ s, meId }: { s: AuctionState; meId: string }) {
+  const p = getPlayer(s, meId)!;
+  const filled = ROLES.length - openRoles(p).length;
+  const open = openRoles(p).length;
   return (
     <>
-      <div className="lot-tag">{tag}</div>
-      <h2 className="champ-name">{champ.name}</h2>
-      <div className="routes">
-        {champ.routes.map(r => (
-          <span key={r} className={`chip ${myValid ? (myValid.includes(r) ? 'ok' : 'no') : ''}`}>
-            {ROLE_LABEL[r]}{card && <b className="ovr"> {card.ovr[r]}</b>}
-          </span>
-        ))}
-        {card && <span className="chip cls">{CLASS_LABEL[card.champClass]}</span>}
-        {!s.config.showOverall && <span className="chip cls">Overall escondido: leilão no olho</span>}
+      <div className="ad-me">
+        <span className="ad-avatar" style={{ background: seatColor(meId) }}>{p.name.slice(0, 1).toUpperCase()}</span>
+        <div><b>{p.name}</b><small>Você</small></div>
+        <span className="ad-count">{filled}/5</span>
       </div>
-      {card && (
-        <div className="attrs-line">
-          {(Object.entries(card.attrs) as [string, number][]).map(([k, v]) => <span key={k}><b>{v}</b> {k}</span>)}
-        </div>
-      )}
-      <div className="bid-box">
-        <div className="bid-label">Maior lance</div>
-        <div className="bid-amount">{amount}</div>
-        <div className="bid-leader">{leader}</div>
+      <div className="ad-budget">
+        <small>Seu orçamento</small>
+        <div key={p.budget} className="anim-bump"><span className="coin">◐</span>{fmt(p.budget)}</div>
+        {open > 0 && <small>{fmt(Math.floor(p.budget / open / 100) * 100)} em média por vaga</small>}
+      </div>
+      <div className="ad-slots">
+        {ROLES.map(r => {
+          const slot = p.roster[r];
+          const c = slot ? s.champions[slot.champId] : null;
+          return (
+            <div key={r} className={`ad-slot ${slot ? 'filled anim-reveal' : ''}`}>
+              {c ? (
+                <>
+                  <ChampImg id={c.id} name={c.name} className="ic" />
+                  <b>{c.name}</b>
+                  <small>{ROLE_LABEL[r]} · {slot!.price ? fmt(slot!.price) : 'sobra'}</small>
+                </>
+              ) : (
+                <><span className="ring">◌</span><small>{ROLE_LABEL[r]}</small><small className="muted">vaga aberta</small></>
+              )}
+            </div>
+          );
+        })}
       </div>
     </>
   );
 }
 
-function Timer({ endsAt, total, now, label }: { endsAt: number; total: number; now: () => number; label?: string }) {
+function RecentBids({ s }: { s: AuctionState }) {
+  const cur = s.current;
+  const bids = (cur ? s.bids.filter(b => b.champId === cur.champId) : s.bids).slice(-5).reverse();
+  return (
+    <div className="ad-list">
+      <h4>Últimos lances</h4>
+      {bids.length ? bids.map(b => (
+        <div key={b.seq} className="row anim-fade-up">
+          <span><i className="dot" style={{ background: seatColor(b.playerId) }} />{getPlayer(s, b.playerId)?.name}</span>
+          <b>{fmt(b.amount)}</b>
+        </div>
+      )) : <p className="muted">Ninguém deu lance ainda.</p>}
+    </div>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Centro: a carta do lote
+// ---------------------------------------------------------------------------
+function LotCard({ s, me, lastPlaced, now }: {
+  s: AuctionState; me: string | null; lastPlaced?: Extract<AuctionEvent, { type: 'placed' }>; now: () => number;
+}) {
+  const cur = s.current, rp = s.routePick;
+  const id = cur?.champId ?? rp?.champId ?? lastPlaced?.champId;
+  const champ = id ? s.champions[id] : null;
+  const card = useMemo(() => (champ ? buildCard(champ.id, champ.routes) : null), [champ]);
+  if (!champ || !card) return <div className="lot lot-empty">Preparando o primeiro campeão…</div>;
+
+  const show = s.config.showOverall !== false;
+  const myValid = cur && me ? validRoles(s, me, champ.id) : null;
+  const legendary = show && card.bestOvr >= 84;
+  const name = (pid: string) => getPlayer(s, pid)?.name ?? '?';
+
+  let status: React.ReactNode, price = 0;
+  if (cur) {
+    price = cur.highBid?.amount ?? s.config.minBid;
+    status = cur.highBid
+      ? <><b style={{ color: seatColor(cur.highBid.playerId) }}>{name(cur.highBid.playerId)}</b> está vencendo</>
+      : <>Sem lances · abre por {fmt(s.config.minBid)}</>;
+  } else if (rp) {
+    price = rp.price;
+    status = <><b style={{ color: seatColor(rp.playerId) }}>{name(rp.playerId)}</b> arrematou e escolhe a rota…</>;
+  } else if (lastPlaced) {
+    price = lastPlaced.price;
+    status = lastPlaced.via === 'sobra'
+      ? <>Sobra para <b>{name(lastPlaced.playerId)}</b></>
+      : <>Vendido para <b style={{ color: seatColor(lastPlaced.playerId) }}>{name(lastPlaced.playerId)}</b></>;
+  }
+
+  return (
+    <div key={champ.id} className={`lot anim-reveal ${legendary ? 'legendary anim-glow' : ''} ${!cur ? 'sold' : ''}`}>
+      <div className="lot-head">
+        <span className="lot-no">{cur ? `Nº ${cur.index}` : rp ? 'Arrematado' : 'Encerrado'}</span>
+        {legendary && <span className="lot-tag">✦ Lendário</span>}
+        {cur ? <Clock endsAt={cur.endsAt} now={now} /> : rp ? <Clock endsAt={rp.deadline} now={now} /> : null}
+      </div>
+      <div className="lot-art">
+        <div className="moon" />
+        <ChampImg key={champ.id} id={champ.id} name={champ.name} big className="splash" />
+        <div className="lot-name">
+          <h2>{card.name}</h2>
+          <p>{card.title}</p>
+          <div className="chips">
+            {champ.routes.map(r => (
+              <span key={r} className={`chip ${myValid ? (myValid.includes(r) ? 'ok' : 'no') : ''}`}>
+                {ROLE_LABEL[r]}{show && <b> {card.ovr[r]}</b>}
+              </span>
+            ))}
+            <span className="chip cls">{CLASS_LABEL[card.champClass]}</span>
+          </div>
+        </div>
+      </div>
+      <div className="lot-info">
+        {show ? (
+          <div className="attrs">
+            {(Object.entries(card.attrs) as [string, number][]).map(([k, v]) => (
+              <span key={k}><b>{v}</b>{k}</span>
+            ))}
+          </div>
+        ) : <p className="muted">Overall escondido: leilão no olho.</p>}
+        {card.roles.length > 0 && <p className="roles">{card.roles.join(' · ')}</p>}
+        {card.abilities.find(a => a.key === 'R') && (
+          <p className="ult"><b>R · {card.abilities.find(a => a.key === 'R')!.name}</b></p>
+        )}
+      </div>
+      <div className="lot-foot">
+        <div>
+          <p className="st">{status}</p>
+          <small>{cur ? `${cur.bidCount} lance${cur.bidCount === 1 ? '' : 's'}${cur.passes.length ? ` · ${cur.passes.length} passaram` : ''}` : ' '}</small>
+        </div>
+        <div key={price} className="price anim-bump"><span className="coin">◐</span>{fmt(price).replace('R$ ', '')}</div>
+      </div>
+    </div>
+  );
+}
+
+function Clock({ endsAt, now }: { endsAt: number; now: () => number }) {
   const [left, setLeft] = useState(() => Math.max(0, endsAt - now()));
   useEffect(() => {
     const id = setInterval(() => setLeft(Math.max(0, endsAt - now())), 100);
     return () => clearInterval(id);
   }, [endsAt, now]);
-  const pct = Math.min(100, (left / total) * 100);
+  const secs = Math.ceil(left / 1000);
   return (
-    <div className="timer">
-      <div className={`timer-bar ${!label && left < 3000 ? 'low' : ''}`} style={{ width: `${pct}%` }} />
-      <span>{label ? `${label} · ${Math.ceil(left / 1000)} s` : `${(left / 1000).toFixed(1)} s`}</span>
-    </div>
+    <span className={`clock ${left < 3000 ? 'low anim-pulse' : ''}`}>
+      <span className="ic">⏱</span><b>{String(secs).padStart(2, '0')}</b><small>seg</small>
+    </span>
   );
 }
 
-function BidControls({ s, me, pending, act, custom, setCustom }: {
-  s: AuctionState; me: string; pending: boolean; act: (a: ClientAction) => void;
-  custom: string; setCustom: (v: string) => void;
-}) {
-  const cur = s.current!; // só é renderizado com um lote em disputa
+function BidBar({ s, me, pending, act }: { s: AuctionState; me: string; pending: boolean; act: (a: ClientAction) => void }) {
+  const cur = s.current!;
   const el = bidEligibility(s, me);
   const leading = cur.highBid?.playerId === me;
   const min = minNextBid(s);
@@ -248,16 +323,11 @@ function BidControls({ s, me, pending, act, custom, setCustom }: {
   const base = cur.highBid?.amount ?? 0;
   const can = el.ok && !leading && !pending;
   const passed = cur.passes.includes(me);
-  const reserve = (openRoles(getPlayer(s, me)!).length - 1) * s.config.minBid;
   const unit = s.config.minIncrement;
   const quick = [1, 5, 10].map((n, i) => ({ key: String(i + 1), label: `+${n}`, amount: Math.max(min, base + n * unit) }));
+  const [confirmMax, setConfirmMax] = useState(false);
 
-  const submitCustom = () => {
-    const v = Math.round(parseFloat(custom.replace(/[^\d,.]/g, '').replace(',', '.'))) * 100;
-    if (Number.isFinite(v)) { act({ type: 'bid', amount: v }); setCustom(''); }
-  };
-
-  // Atalhos de teclado: 1/2/3 = +1/+5/+10, T = tudo, P = passar
+  // Atalhos: 1/2/3 = +1/+5/+10, T = tudo, P = passar
   const latest = useRef({ can, max, min, quick, passed, leading });
   latest.current = { can, max, min, quick, passed, leading };
   useEffect(() => {
@@ -274,159 +344,84 @@ function BidControls({ s, me, pending, act, custom, setCustom }: {
   }, [act]);
 
   return (
-    <>
-      <div className="quick">
+    <div className="bidbar">
+      <div className="bids">
         {quick.map(q => (
-          <button key={q.key} className="btn-bid" disabled={!can || q.amount > max} onClick={() => act({ type: 'bid', amount: q.amount })}>
-            {q.label}<small>{fmt(q.amount)} · tecla {q.key}</small>
+          <button key={q.key} className="bid" disabled={!can || q.amount > max} onClick={() => act({ type: 'bid', amount: q.amount })}>
+            {q.label}<small>{fmt(q.amount).replace('R$ ', '')} moedas</small>
           </button>
         ))}
-        <button className="btn-bid allin" disabled={!can || max < min} onClick={() => act({ type: 'bid', amount: max })}>
-          Tudo<small>{fmt(max)} · tecla T</small>
+      </div>
+      <div className="bids2">
+        <button
+          className={`max ${confirmMax ? 'armed' : ''}`} disabled={!can || max < min}
+          onClick={() => { if (confirmMax) { act({ type: 'bid', amount: max }); setConfirmMax(false); } else setConfirmMax(true); }}
+        >
+          {confirmMax ? `Confirmar ${fmt(max)}` : `Máximo · ${fmt(max).replace('R$ ', '')}`} <span>🔒</span>
+        </button>
+        <button className="pass" disabled={passed || leading || pending} onClick={() => act({ type: 'pass' })}>
+          {passed ? 'Passou' : 'Passar'}
         </button>
       </div>
-      <div className="custom">
-        <span className="prefix">R$</span>
-        <input
-          value={custom} onChange={e => setCustom(e.target.value)} inputMode="numeric" placeholder="valor"
-          disabled={!can} onKeyDown={e => { if (e.key === 'Enter') submitCustom(); }}
-        />
-        <button className="btn-secondary" disabled={!can} onClick={submitCustom}>Dar lance</button>
-        <button className="btn-pass" disabled={passed || leading || pending || !el.ok && !passed && el.reason.startsWith('Nenhum')} onClick={() => act({ type: 'pass' })}>
-          {passed ? 'Passou' : 'Passar (P)'}
-        </button>
-      </div>
-      <div className={`hint ${leading ? 'lead' : !el.ok ? 'bad' : ''}`}>
+      <p className={`hint ${leading ? 'lead' : !el.ok ? 'bad' : ''}`}>
         {leading ? 'O maior lance é seu. Se ninguém cobrir, ele é seu.'
           : !el.ok ? el.reason
-          : `Você pode ir até ${fmt(max)} (guardando ${fmt(reserve)} para as outras vagas). Lance no fim garante ${s.config.bidExtendMs / 1000} s no relógio.`}
-      </div>
-    </>
+          : `Uma moeda por vaga restante fica reservada. Atalhos: 1, 2, 3, T e P.`}
+      </p>
+    </div>
   );
 }
 
-function MyTeam({ s, meId }: { s: AuctionState; meId: string }) {
-  const p = getPlayer(s, meId)!;
+// ---------------------------------------------------------------------------
+// Coluna da direita: outros jogadores
+// ---------------------------------------------------------------------------
+function PlayerRow({ s, pid }: { s: AuctionState; pid: string }) {
+  const p = getPlayer(s, pid)!;
+  const cur = s.current;
+  const leader = cur?.highBid?.playerId === pid;
+  const passed = cur?.passes.includes(pid);
+  const el = cur ? bidEligibility(s, pid) : { ok: true as const };
   const filled = ROLES.length - openRoles(p).length;
+  const tag = p.isBot ? BOT_PROFILES[p.botProfile ?? 'equilibrado'].label : 'Jogador';
   return (
-    <section className="myteam panel-d">
-      <h3>Seu time <small>{filled}/5 · gasto {fmt(s.config.budget - p.budget)}</small></h3>
-      <div className="slots">
+    <div className={`ad-player ${leader ? 'leader' : ''} ${cur && !el.ok && !leader ? 'out' : ''}`} style={{ '--pc': seatColor(pid) } as React.CSSProperties}>
+      <div className="ph">
+        <span className="ad-avatar sm" style={{ background: seatColor(pid) }}>{p.name.slice(0, 1).toUpperCase()}</span>
+        <b>{p.name}</b>
+        <span className="money"><span className="coin">◐</span>{fmt(p.budget).replace('R$ ', '')}</span>
+      </div>
+      <div className="mslots">
         {ROLES.map(r => {
           const slot = p.roster[r];
           const c = slot ? s.champions[slot.champId] : null;
           return (
-            <div key={r} className={`slot ${slot ? 'filled' : ''}`}>
-              <div className="role">{ROLE_LABEL[r]}</div>
-              {c ? <ChampImg id={c.id} name={c.name} className="ic" /> : <div className="ic empty" />}
-              <div className="nm">{c ? c.name : 'vazio'}</div>
-              <div className="pr">{slot ? `${fmt(slot.price)}${HOW_LABEL[slot.how] ? ' · ' + HOW_LABEL[slot.how] : ''}` : ' '}</div>
-            </div>
+            <span key={r} className="ms" title={`${ROLE_LABEL[r]}${c ? `: ${c.name} · ${fmt(slot!.price)}` : ''}`}>
+              {c ? <ChampImg id={c.id} name={c.name} /> : ROLE_SHORT[r]}
+            </span>
           );
         })}
       </div>
-    </section>
+      <small className="ps">
+        {filled}/5 · {tag}
+        {leader ? ' · lidera' : passed ? ' · passou' : cur && !el.ok ? ' · fora da disputa' : ''}
+      </small>
+    </div>
   );
 }
 
-function Players({ s, me }: { s: AuctionState; me: string | null }) {
-  const cur = s.current;
+function LastSold({ s }: { s: AuctionState }) {
+  const sold = s.sales.slice(-4).reverse();
   return (
-    <section className="players panel-d">
-      <h3>Participantes</h3>
-      <div className="plist">
-        {s.players.map(p => {
-          const leader = cur?.highBid?.playerId === p.id;
-          const el = cur ? bidEligibility(s, p.id) : { ok: true as const };
-          const open = openRoles(p).length;
-          const status = leader ? `Liderando com ${fmt(cur!.highBid!.amount)}`
-            : !open ? 'Time completo'
-            : cur && !el.ok ? el.reason.replace('Você não tem', 'Sem').replace('Seu time', 'Time')
-            : `Lance máx. ${fmt(maxBid(s, p.id))}`;
-          const tag = p.isBot ? `Bot · ${BOT_PROFILES[p.botProfile ?? 'equilibrado'].label}` : p.id === me ? 'Você' : 'Jogador';
-          return (
-            <div key={p.id} className={`pcard ${leader ? 'leader' : ''} ${cur && !el.ok && !leader ? 'out' : ''}`} style={{ '--pc': seatColor(p.id) } as React.CSSProperties}>
-              <div className="pc-head"><b>{p.name}</b><span className="tag">{tag}</span><span className="money">{fmt(p.budget)}</span></div>
-              <div className="pc-slots">
-                {ROLES.map(r => {
-                  const slot = p.roster[r];
-                  const c = slot ? s.champions[slot.champId] : null;
-                  return (
-                    <div key={r} className="mini" title={`${ROLE_LABEL[r]}${c ? `: ${c.name} · ${fmt(slot!.price)}` : ''}`}>
-                      {c ? <ChampImg id={c.id} name={c.name} /> : ROLE_SHORT[r]}
-                    </div>
-                  );
-                })}
-              </div>
-              <div className={`pc-status ${leader ? 'lead' : ''}`}>{status}</div>
-            </div>
-          );
-        })}
-      </div>
-    </section>
-  );
-}
-
-function Pool({ s }: { s: AuctionState }) {
-  const owner = new Map(s.sales.map(x => [x.champId, x]));
-  const curId = s.current?.champId ?? s.routePick?.champId;
-  const all = Object.values(s.champions).sort((a, b) =>
-    ROLES.indexOf(a.routes[0]) - ROLES.indexOf(b.routes[0]) || a.name.localeCompare(b.name));
-  return (
-    <section className="pool panel-d">
-      <h3>Campeões <small>{s.queue.length + (s.current ? 1 : 0)} na fila</small></h3>
-      {s.queue.length > 0 && (
-        <div className="next">
-          Próximos:
-          {s.queue.slice(0, 3).map(id => (
-            <div key={id} className="mini" title={s.champions[id].name}><ChampImg id={id} name={s.champions[id].name} /></div>
-          ))}
+    <div className="ad-list">
+      <h4>Últimos arremates</h4>
+      {sold.length ? sold.map(x => (
+        <div key={x.champId} className="row sold anim-fade-up">
+          <ChampImg id={x.champId} name={s.champions[x.champId].name} className="ic" />
+          <span><b>{getPlayer(s, x.playerId)?.name}</b> levou {s.champions[x.champId].name}</span>
+          <b>{x.price ? fmt(x.price) : 'sobra'}</b>
         </div>
-      )}
-      <div className="pool-grid">
-        {all.map(c => {
-          const sale = owner.get(c.id);
-          const cls = sale ? 'sold' : c.id === curId ? 'current' : '';
-          const title = `${c.name} (${c.routes.map(r => ROLE_SHORT[r]).join('/')})${sale ? ` · ${getPlayer(s, sale.playerId)?.name} · ${fmt(sale.price)}` : ''}`;
-          return (
-            <div key={c.id} className={`pchamp ${cls}`} title={title} style={{ '--pc': sale ? seatColor(sale.playerId) : 'transparent' } as React.CSSProperties}>
-              <ChampImg id={c.id} name={c.name} />
-              {sale && <div className="price">{fmt(sale.price).replace('R$ ', '')}</div>}
-            </div>
-          );
-        })}
-      </div>
-    </section>
-  );
-}
-
-function Log({ s }: { s: AuctionState }) {
-  const who = (id: string) => <span className="who" style={{ color: seatColor(id) }}>{getPlayer(s, id)?.name}</span>;
-  const cn = (id: string) => <b>{s.champions[id]?.name}</b>;
-  const text = (e: AuctionEvent): React.ReactNode => {
-    switch (e.type) {
-      case 'lot_start': return <>Campeão {e.index}: {cn(e.champId)}</>;
-      case 'bid': return <>{who(e.playerId)} deu {fmt(e.amount)} em {cn(e.champId)}</>;
-      case 'pass': return <>{who(e.playerId)} passou</>;
-      case 'sold': return <>{cn(e.champId)} arrematado por {who(e.playerId)} por <b>{fmt(e.amount)}</b></>;
-      case 'unsold': return <>{cn(e.champId)} ficou sem lances: passou, passou</>;
-      case 'route_pick': return <>{who(e.playerId)} está escolhendo a rota de {cn(e.champId)}</>;
-      case 'placed': return e.via === 'sobra'
-        ? <>{who(e.playerId)} completa o {ROLE_LABEL[e.role]} de graça com {cn(e.champId)}{e.offRole ? ' (fora da rota: vale metade)' : ''}</>
-        : <>{who(e.playerId)} colocou {cn(e.champId)} no <b>{ROLE_LABEL[e.role]}</b>{e.via === 'auto' ? ' (automático)' : ''}</>;
-      case 'finished': return <b>Draft encerrado!</b>;
-    }
-  };
-  const evs = s.events.slice(-60).reverse();
-  return (
-    <section className="log panel-d">
-      <h3>Histórico</h3>
-      <ol>
-        {evs.map((e, i) => (
-          <li key={s.events.length - i} className={['sold', 'finished'].includes(e.type) ? 'big' : ''}>{text(e)}</li>
-        ))}
-      </ol>
-    </section>
+      )) : <p className="muted">Os arremates aparecem aqui.</p>}
+    </div>
   );
 }
 
@@ -441,17 +436,16 @@ function RouteModal({ s, pending, now, onPick }: {
     return () => clearInterval(id);
   }, [rp.deadline, now]);
   return (
-    <div className="overlay">
-      <div className="route-card">
-        <ChampImg id={c.id} name={c.name} />
+    <div className="ad-overlay">
+      <div className="ad-modal anim-reveal">
+        <ChampImg id={c.id} name={c.name} className="ic" />
         <h2>{c.name} é seu!</h2>
         <p>{rp.price ? `Pago: ${fmt(rp.price)}` : 'De graça'} · escolha a rota em <b>{left}</b> s</p>
-        <div className="route-btns">
+        <div className="opts">
           {rp.options.map(r => (
-            <button key={r} className="btn-secondary" disabled={pending} onClick={() => onPick(r)}>{ROLE_LABEL[r]}</button>
+            <button key={r} className="btn-primary" disabled={pending} onClick={() => onPick(r)}>{ROLE_LABEL[r]}</button>
           ))}
         </div>
-        <p className="small">Só aparecem as rotas que não travam o draft de ninguém.</p>
       </div>
     </div>
   );
@@ -473,7 +467,7 @@ function Results({ s, me }: { s: AuctionState; me: string | null }) {
   }, [s]);
 
   const copy = async () => {
-    const lines = ['NEXUS DRAFT: resultado', ''];
+    const lines = ['100 PRO DRAFT: resultado', ''];
     s.players.forEach(p => {
       lines.push(`${p.name} (gastou ${fmt(s.config.budget - p.budget)})`);
       ROLES.forEach(r => { const x = p.roster[r]!; lines.push(`  ${ROLE_LABEL[r]}: ${s.champions[x.champId].name} · ${fmt(x.price)}`); });
@@ -483,11 +477,10 @@ function Results({ s, me }: { s: AuctionState; me: string | null }) {
   };
 
   return (
-    <div className="nx-draft">
-      <div className="topline"><span>Draft encerrado</span></div>
-      <div className="highlights">
+    <div className="ad-results">
+      <div className="hls">
         {highlights.map(h => (
-          <div key={h.k} className="hl"><div className="k">{h.k}</div><div className="v">{h.v}</div><div className="s">{h.d}</div></div>
+          <div key={h.k} className="hl"><small>{h.k}</small><b>{h.v}</b><span>{h.d}</span></div>
         ))}
       </div>
       <div className="teams">
@@ -500,8 +493,8 @@ function Results({ s, me }: { s: AuctionState; me: string | null }) {
               return (
                 <div key={r} className="trow">
                   <span className="role">{ROLE_LABEL[r]}</span>
-                  <ChampImg id={c.id} name={c.name} />
-                  <span>{c.name}<span className="how">{HOW_LABEL[x.how]}</span></span>
+                  <ChampImg id={c.id} name={c.name} className="ic" />
+                  <span>{c.name}<span className="how">{HOW_LABEL[x.how]}{x.offRole ? ' · fora da rota' : ''}</span></span>
                   <span className="pr">{fmt(x.price)}</span>
                 </div>
               );
@@ -509,7 +502,7 @@ function Results({ s, me }: { s: AuctionState; me: string | null }) {
           </div>
         ))}
       </div>
-      <div className="results-actions">
+      <div className="actions">
         <button className="btn-secondary" onClick={copy}>{copied ? 'Copiado!' : 'Copiar resultado'}</button>
         <Link href="/jogar" className="btn-primary px-6">Jogar de novo</Link>
       </div>

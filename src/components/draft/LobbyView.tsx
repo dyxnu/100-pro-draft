@@ -117,12 +117,12 @@ export function LobbyView({ room, members, meId, isMember }: {
             {isHost ? (
               <div className="grid gap-3 text-sm sm:grid-cols-2">
                 <label className="flex items-center gap-2">
-                  <input type="checkbox" checked={room.bots_enabled} disabled={pending} className="h-4 w-4 accent-[#c8aa6e]"
+                  <input type="checkbox" checked={room.bots_enabled} disabled={pending} className="h-4 w-4 accent-[#4c4fb5]"
                     onChange={e => run(() => updateSettingsAction(room.code, { botsEnabled: e.target.checked }))} />
                   Completar vagas com bots
                 </label>
                 <label className="flex items-center gap-2">
-                  <input type="checkbox" checked={room.show_overall} disabled={pending} className="h-4 w-4 accent-[#c8aa6e]"
+                  <input type="checkbox" checked={room.show_overall} disabled={pending} className="h-4 w-4 accent-[#4c4fb5]"
                     onChange={e => run(() => updateSettingsAction(room.code, { showOverall: e.target.checked }))} />
                   Overall à mostra no leilão
                 </label>
@@ -162,7 +162,7 @@ export function LobbyView({ room, members, meId, isMember }: {
             </div>
           </div>
         )}
-        {error && <p role="alert" className="rounded-lg border border-danger/50 bg-danger/10 px-3 py-2 text-sm text-[#ffd5db]">{error}</p>}
+        {error && <p role="alert" className="alert-error">{error}</p>}
       </section>
     </div>
   );

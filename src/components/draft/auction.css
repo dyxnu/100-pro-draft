@@ -1,0 +1,158 @@
+/* Leilão do 100 pro Draft — 3 colunas, carta central com moldura dourada (estilo Liga dos 100). */
+.ad { margin-top: 18px; }
+.ad .muted { color: var(--color-muted); }
+.ad-top { display: flex; justify-content: center; align-items: center; gap: 12px; flex-wrap: wrap; position: relative; margin-bottom: 14px; }
+.ad-pill { background: var(--color-moon); color: var(--color-gold2); font-weight: 800; padding: 6px 16px; border-radius: 12px; border: 1px solid #cfcaf5; }
+.ad-room { position: absolute; right: 0; font-size: 12px; color: var(--color-muted); }
+.ad-grid { display: grid; grid-template-columns: 250px minmax(0, 1fr) 280px; gap: 18px; align-items: start; }
+.ad-box { background: var(--color-panel); border: 1px solid var(--color-line); border-radius: 16px; padding: 14px; }
+
+/* esquerda */
+.ad-me { display: flex; align-items: center; gap: 10px; margin-bottom: 10px; }
+.ad-me b { display: block; font-weight: 800; }
+.ad-me small { color: var(--color-muted); font-size: 11px; }
+.ad-count { margin-left: auto; font-weight: 800; color: var(--color-muted); }
+.ad-avatar { display: grid; place-items: center; width: 34px; height: 34px; border-radius: 10px; color: #fff; font-weight: 900; flex: none; }
+.ad-avatar.sm { width: 26px; height: 26px; border-radius: 8px; font-size: 12px; }
+.ad-budget { background: var(--color-panel2); border: 1px solid var(--color-line); border-radius: 16px; padding: 12px 14px; margin-bottom: 12px; }
+.ad-budget small { display: block; font-size: 12px; color: var(--color-muted); font-weight: 600; }
+.ad-budget > div { font-size: 34px; font-weight: 900; color: var(--color-gold2); display: flex; align-items: center; gap: 8px; }
+.coin { color: var(--color-gold); font-weight: 900; }
+.ad-slots { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+.ad-slot { min-height: 92px; border: 1.5px dashed #cfcce8; border-radius: 14px; background: #fafaff; display: flex; flex-direction: column; align-items: center; justify-content: center; text-align: center; padding: 6px; gap: 2px; }
+.ad-slot .ring { font-size: 22px; color: #bdb9e3; line-height: 1; }
+.ad-slot small { font-size: 11px; color: var(--color-gold2); font-weight: 700; }
+.ad-slot small.muted { font-weight: 500; color: var(--color-muted); }
+.ad-slot.filled { border: 1.5px solid #cfcaf5; background: #fff; }
+.ad-slot.filled b { font-size: 12px; line-height: 1.1; }
+.ad-slot .ic { width: 40px; height: 40px; border-radius: 10px; object-fit: cover; }
+.ad-slot:nth-child(5) { grid-column: 1 / -1; }
+
+.ad-list { margin-top: 14px; }
+.ad-list h4 { font-size: 13px; font-weight: 800; color: var(--color-gold2); margin-bottom: 6px; }
+.ad-list .row { display: flex; align-items: center; justify-content: space-between; gap: 8px; padding: 6px 0; border-bottom: 1px solid var(--color-line); font-size: 13px; }
+.ad-list .row b { color: var(--color-gold2); white-space: nowrap; }
+.ad-list .dot { display: inline-block; width: 8px; height: 8px; border-radius: 99px; margin-right: 6px; }
+.ad-list .row.sold { justify-content: flex-start; }
+.ad-list .row.sold span { flex: 1; min-width: 0; font-size: 12px; }
+.ad-list .row .ic { width: 28px; height: 28px; border-radius: 8px; flex: none; }
+.ad-list p { font-size: 13px; }
+
+/* centro: a carta */
+.lot {
+  background: linear-gradient(180deg, #fff7df, #f8ebc6); border: 3px solid #d8b75e; border-radius: 22px; overflow: hidden;
+  box-shadow: 0 22px 50px -26px rgba(38, 42, 114, .6);
+}
+.lot.sold { filter: saturate(.85); }
+.lot-empty { padding: 60px 20px; text-align: center; color: var(--color-muted); font-weight: 700; }
+.lot-head { display: flex; align-items: center; gap: 10px; padding: 10px 14px; }
+.lot-no { font-size: 13px; font-weight: 800; color: #7a6224; }
+.lot-tag { font-size: 11px; font-weight: 900; color: #fff; background: linear-gradient(90deg, #6d63db, #b48a2f); padding: 3px 10px; border-radius: 99px; }
+.clock { margin-left: auto; display: inline-flex; align-items: baseline; gap: 4px; background: #fffaf0; border: 1.5px solid #e2c77c; border-radius: 12px; padding: 4px 12px; color: var(--color-danger); }
+.clock .ic { font-size: 14px; }
+.clock b { font-size: 26px; font-weight: 900; font-variant-numeric: tabular-nums; line-height: 1; }
+.clock small { font-size: 10px; font-weight: 700; }
+.clock:not(.low) { color: var(--color-gold2); }
+.lot-art { position: relative; height: 300px; margin: 0 12px; border-radius: 16px; overflow: hidden; background: linear-gradient(180deg, #1f2257 0%, #4c4fb5 55%, #9389ea 100%); }
+.lot-art .moon { position: absolute; top: 18px; right: 30px; width: 90px; height: 90px; border-radius: 50%; box-shadow: -18px 8px 0 0 #f4ecc7; opacity: .9; }
+.lot-art .splash { position: absolute; left: 24px; bottom: -6px; width: 160px; height: 290px; object-fit: cover; object-position: top; border-radius: 12px 12px 0 0; box-shadow: 0 0 0 3px rgba(255, 255, 255, .55), 0 18px 30px rgba(0, 0, 0, .45); }
+.lot-art .img-fallback.splash { display: grid; place-items: center; font-size: 48px; color: #fff; background: rgba(255,255,255,.1); }
+.lot-name { position: absolute; left: 200px; right: 16px; bottom: 18px; color: #fff; }
+.lot-name h2 { font-size: 40px; font-weight: 900; line-height: 1; text-shadow: 0 3px 10px rgba(0, 0, 0, .45); }
+.lot-name p { margin-top: 4px; font-size: 13px; opacity: .85; font-style: italic; }
+.chips { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 10px; }
+.chip { font-size: 12px; font-weight: 800; padding: 3px 10px; border-radius: 8px; background: rgba(255, 255, 255, .9); color: var(--color-gold2); }
+.chip b { color: #8a6a1f; }
+.chip.ok { background: #e3fbf2; color: #0f7a62; }
+.chip.no { opacity: .55; text-decoration: line-through; }
+.chip.cls { background: #fff3c4; color: #7a6224; }
+.lot-info { padding: 12px 16px 4px; }
+.attrs { display: grid; grid-template-columns: repeat(6, minmax(0, 1fr)); gap: 6px; }
+.attrs span { background: #fffdf5; border: 1px solid #ecdcae; border-radius: 10px; text-align: center; font-size: 10px; font-weight: 800; color: #7a6224; padding: 4px 0; }
+.attrs b { display: block; font-size: 17px; color: var(--color-gold2); }
+.lot-info .roles { margin-top: 8px; font-size: 12px; color: #7a6224; font-weight: 700; }
+.lot-info .ult { margin-top: 2px; font-size: 12px; color: var(--color-gold2); }
+.lot-foot { display: flex; align-items: center; justify-content: space-between; gap: 10px; padding: 10px 16px 14px; border-top: 1px dashed #e2c77c; margin-top: 8px; }
+.lot-foot .st { font-size: 15px; font-weight: 700; color: var(--color-gold2); }
+.lot-foot small { font-size: 11px; color: #7a6224; }
+.lot-foot .price { font-size: 46px; font-weight: 900; color: var(--color-gold2); display: flex; align-items: center; gap: 6px; line-height: 1; }
+
+/* botões de lance */
+.bidbar { margin-top: 12px; }
+.bids { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; }
+.bid {
+  display: flex; flex-direction: column; align-items: center; padding: 12px 6px; border-radius: 14px; color: #fff; font-size: 26px; font-weight: 900; line-height: 1.05;
+  background: linear-gradient(180deg, #5b5fd0, #3d40a1); box-shadow: 0 5px 0 #2b2e7a; transition: transform .08s, filter .15s;
+}
+.bid small { font-size: 11px; font-weight: 700; opacity: .85; margin-top: 3px; }
+.bid:hover:not(:disabled) { filter: brightness(1.1); }
+.bid:active:not(:disabled) { transform: translateY(3px); box-shadow: 0 2px 0 #2b2e7a; }
+.bid:disabled { opacity: .38; cursor: not-allowed; }
+.bids2 { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-top: 10px; }
+.bids2 button { border-radius: 12px; padding: 11px; font-weight: 800; }
+.bids2 .max { background: #f6ecc8; color: #7a6224; border: 1.5px solid #e2c77c; }
+.bids2 .max.armed { background: #b48a2f; color: #fff; }
+.bids2 .pass { background: #fff; border: 1.5px solid var(--color-line); color: var(--color-gold2); }
+.bids2 button:disabled { opacity: .45; cursor: not-allowed; }
+.bidbar .hint { text-align: center; font-size: 12px; color: var(--color-muted); margin-top: 8px; }
+.bidbar .hint.lead { color: var(--color-teal); font-weight: 800; }
+.bidbar .hint.bad { color: var(--color-danger); }
+
+/* direita */
+.ad-head { display: flex; justify-content: space-between; align-items: baseline; margin-bottom: 8px; }
+.ad-head h3 { font-size: 14px; font-weight: 800; color: var(--color-gold2); }
+.ad-head small { color: var(--color-muted); font-size: 12px; }
+.ad-player { border-left: 4px solid var(--pc); background: var(--color-panel); border-radius: 12px; padding: 8px 10px; margin-bottom: 8px; box-shadow: 0 4px 14px -12px rgba(38, 42, 114, .5); transition: box-shadow .2s, opacity .2s; }
+.ad-player.leader { box-shadow: 0 0 0 2px var(--pc), 0 8px 20px -10px var(--pc); }
+.ad-player.out { opacity: .6; }
+.ad-player .ph { display: flex; align-items: center; gap: 8px; }
+.ad-player .ph b { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 14px; }
+.ad-player .money { font-weight: 900; color: var(--color-gold2); }
+.mslots { display: grid; grid-template-columns: repeat(5, 1fr); gap: 4px; margin-top: 6px; }
+.ms { aspect-ratio: 1; border-radius: 8px; background: var(--color-panel2); border: 1px solid var(--color-line); display: grid; place-items: center; font-size: 9px; font-weight: 800; color: #a9a6cf; overflow: hidden; }
+.ms img, .ms .img-fallback { width: 100%; height: 100%; object-fit: cover; }
+.ad-player .ps { display: block; margin-top: 4px; font-size: 11px; color: var(--color-muted); }
+
+/* modal da rota e aviso */
+.ad-overlay { position: fixed; inset: 0; background: rgba(29, 33, 72, .45); display: grid; place-items: center; z-index: 40; padding: 16px; backdrop-filter: blur(3px); }
+.ad-modal { background: #fff; border-radius: 20px; padding: 24px; width: 100%; max-width: 380px; text-align: center; border: 3px solid #d8b75e; }
+.ad-modal .ic { width: 84px; height: 84px; border-radius: 16px; margin: 0 auto 10px; display: block; }
+.ad-modal h2 { font-size: 24px; font-weight: 900; color: var(--color-gold2); }
+.ad-modal p { color: var(--color-muted); margin: 6px 0 16px; }
+.ad-modal .opts { display: grid; gap: 8px; }
+.ad-toast { position: fixed; left: 50%; bottom: 24px; transform: translateX(-50%); background: #fff; border: 1.5px solid var(--color-danger); color: var(--color-danger); padding: 10px 16px; border-radius: 12px; z-index: 50; font-weight: 700; box-shadow: 0 10px 30px -10px rgba(210, 63, 92, .5); }
+
+/* resumo do leilão */
+.ad-results .hls { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 10px; margin-bottom: 14px; }
+.ad-results .hl { background: var(--color-panel); border: 1px solid var(--color-line); border-radius: 14px; padding: 12px; }
+.ad-results .hl small { font-size: 11px; color: var(--color-muted); text-transform: uppercase; letter-spacing: .1em; font-weight: 700; }
+.ad-results .hl b { display: block; font-size: 18px; color: var(--color-gold2); }
+.ad-results .hl span { font-size: 12px; color: var(--color-muted); }
+.ad-results .teams { display: grid; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); gap: 10px; }
+.ad-results .team { background: var(--color-panel); border: 1px solid var(--color-line); border-top: 4px solid var(--pc); border-radius: 14px; padding: 12px; }
+.ad-results .team.me { box-shadow: 0 0 0 2px var(--color-accent); }
+.ad-results .team-head { display: flex; justify-content: space-between; gap: 8px; margin-bottom: 6px; font-size: 12px; color: var(--color-muted); }
+.ad-results .team-head b { color: var(--color-text); font-size: 15px; }
+.ad-results .trow { display: grid; grid-template-columns: 58px 30px 1fr auto; align-items: center; gap: 8px; padding: 4px 0; font-size: 13px; }
+.ad-results .trow .role { font-size: 11px; font-weight: 800; color: var(--color-muted); }
+.ad-results .trow .ic { width: 30px; height: 30px; border-radius: 8px; }
+.ad-results .trow .how { font-size: 10px; color: var(--color-muted); margin-left: 6px; }
+.ad-results .trow .pr { font-weight: 800; color: var(--color-gold2); }
+.ad-results .actions { display: flex; gap: 10px; justify-content: center; margin-top: 14px; }
+
+@media (max-width: 1050px) {
+  .ad-grid { grid-template-columns: minmax(0, 1fr); }
+  .ad-center { order: -1; }
+  .ad-room { position: static; }
+  .ad-slots { grid-template-columns: repeat(5, minmax(0, 1fr)); }
+  .ad-slot:nth-child(5) { grid-column: auto; }
+}
+@media (max-width: 560px) {
+  .lot-art { height: 250px; }
+  .lot-art .splash { width: 120px; height: 220px; left: 12px; }
+  .lot-name { left: 142px; }
+  .lot-name h2 { font-size: 28px; }
+  .attrs { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+  .lot-foot .price { font-size: 36px; }
+  .ad-slots { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+}

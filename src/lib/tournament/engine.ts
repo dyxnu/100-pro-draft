@@ -1,4 +1,4 @@
-// NEXUS DRAFT: campeonato mata-mata depois do leilão (puro e serializável, como o leilão).
+// 100 PRO DRAFT: campeonato mata-mata depois do leilão (puro e serializável, como o leilão).
 // Fluxo: escalação (todos confirmam "Pronto" ou o tempo acaba) → rodada com partidas
 // simultâneas (táticas ao vivo) → próxima escalação → ... → campeão.
 import { ROLES, type AuctionState, type Champion, type Role, nextRandom } from '@/lib/auction/engine';

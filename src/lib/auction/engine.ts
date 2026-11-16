@@ -1,4 +1,4 @@
-// NEXUS DRAFT: motor do leilão (autoritativo), regras v2 (inspiradas no 100pracada).
+// 100 PRO DRAFT: motor do leilão (autoritativo), regras v2 (inspiradas no 100pracada).
 // Funções puras sobre um estado 100% serializável (JSON). Roda no servidor; o cliente
 // só envia intenções (placeBid / passLot / chooseRoute). Valores em CENTAVOS.
 //

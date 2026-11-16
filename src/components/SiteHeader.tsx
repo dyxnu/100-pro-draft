@@ -6,31 +6,28 @@ import { Logo } from './Logo';
 export async function SiteHeader() {
   const session = await getCurrentUser();
   const profile = session?.profile;
+  const nav = 'rounded-lg px-2.5 py-1.5 font-semibold text-muted transition hover:bg-moon hover:text-gold2';
 
   return (
-    <header className="sticky top-0 z-10 border-b border-line bg-bg/75 backdrop-blur">
-      <div className="mx-auto flex max-w-6xl items-center justify-between gap-4 px-4 py-3 sm:px-6">
+    <header className="sticky top-0 z-20 px-3 pt-3 sm:px-6">
+      <div className="mx-auto flex max-w-6xl items-center justify-between gap-3 rounded-2xl border border-line bg-panel/90 px-4 py-2.5 shadow-[0_8px_30px_-18px_rgba(38,42,114,.5)] backdrop-blur">
         <Link href="/" aria-label="Início"><Logo /></Link>
-        <nav className="flex items-center gap-2 text-sm sm:gap-4">
-          <Link href="/campeoes" className="text-muted hover:text-text">Campeões</Link>
+        <nav className="flex items-center gap-1 text-sm">
+          <Link href="/jogar" className={nav}>Arena</Link>
+          <Link href="/campeoes" className={`${nav} hidden sm:inline`}>Campeões</Link>
+          <Link href="/#como-jogar" className={`${nav} hidden md:inline`}>Como jogar</Link>
           {profile ? (
             <>
-              <Link href="/jogar" className="font-semibold text-gold hover:text-gold2">Jogar</Link>
-              <Link href="/perfil" className="flex items-center gap-2 rounded-lg px-2 py-1 hover:bg-panel2">
-                <span className="grid h-7 w-7 place-items-center rounded-full bg-panel2 text-xs font-bold text-gold">
+              <Link href="/perfil" className="ml-1 flex items-center gap-2 rounded-xl border border-line px-2 py-1 hover:border-accent">
+                <span className="grid h-7 w-7 place-items-center rounded-full bg-moon text-xs font-black text-accent">
                   {profile.username.slice(0, 1).toUpperCase()}
                 </span>
-                <span className="hidden font-semibold sm:inline">{profile.username}</span>
+                <span className="hidden font-bold sm:inline">{profile.username}</span>
               </Link>
-              <form action={signOut}>
-                <button className="text-muted hover:text-text">Sair</button>
-              </form>
+              <form action={signOut}><button className={nav}>Sair</button></form>
             </>
           ) : (
-            <>
-              <Link href="/entrar" className="text-muted hover:text-text">Entrar</Link>
-              <Link href="/cadastro" className="btn-secondary !py-1.5">Criar conta</Link>
-            </>
+            <Link href="/entrar" className="btn-secondary ml-1 !py-1.5">Fazer login</Link>
           )}
         </nav>
       </div>
