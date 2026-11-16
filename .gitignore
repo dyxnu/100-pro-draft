@@ -45,3 +45,4 @@ next-env.d.ts
 
 # cache da coleta da API da Riot
 .riot-cache/
+.riot-cache-log.txt

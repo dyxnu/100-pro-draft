@@ -9,7 +9,7 @@ interface RiotStats {
   collectedAt: string | null;
   matches: number;
   patches: string[];
-  champions: Record<string, WL & { roles: Partial<Record<Role, WL>> }>;
+  champions: Record<string, WL & { roles: Partial<Record<Role, WL>>; short?: WL; long?: WL }>;
   matchups: Record<string, WL>;
   duos: Record<string, WL>;
 }
@@ -35,6 +35,20 @@ export function laneMatchup(a: string, b: string, role: Role): { wr: number; gam
   if (games < MIN_MATCHUP_GAMES) return null;
   const wins = (ab?.wins ?? 0) + ((ba?.games ?? 0) - (ba?.wins ?? 0));
   return { wr: wins / games, games };
+}
+
+const MIN_PHASE_GAMES = 20;
+
+/**
+ * Quanto o campeão "escala": winrate em jogos longos (> 32 min) menos em jogos curtos (< 25 min),
+ * encolhido conforme o tamanho da amostra. Positivo = forte no fim; negativo = forte no começo.
+ */
+export function scalingDelta(champ: string): { delta: number; short: number; long: number } | null {
+  const c = STATS.champions[champ];
+  if (!c?.short || !c?.long || c.short.games < MIN_PHASE_GAMES || c.long.games < MIN_PHASE_GAMES) return null;
+  const n = Math.min(c.short.games, c.long.games);
+  const raw = c.long.wins / c.long.games - c.short.wins / c.short.games;
+  return { delta: raw * (n / (n + 60)), short: c.short.games, long: c.long.games };
 }
 
 /** Winrate da dupla atirador + suporte; null se a amostra for pequena. */

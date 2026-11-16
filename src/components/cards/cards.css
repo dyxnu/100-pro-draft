@@ -35,3 +35,10 @@
 .nx-card.size-sm .nx-name { font-size: 13px; }
 .nx-card.size-sm .nx-attrs { font-size: 11px; gap: 1px 8px; }
 .nx-card .img-fallback { background: linear-gradient(135deg, #24324a, #121a27); color: var(--color-gold); font-weight: 800; }
+
+/* winrate real (Riot Match-V5) */
+.nx-wr { display: flex; align-items: baseline; justify-content: center; gap: 6px; margin-top: 6px; font-size: 11px; color: var(--color-muted); }
+.nx-wr b { font-size: 13px; font-weight: 900; }
+.nx-wr b.up { color: var(--color-teal); }
+.nx-wr b.down { color: var(--color-danger); }
+.nx-wr small { font-size: 10px; opacity: .8; }

@@ -82,7 +82,7 @@ console.log(`\nPartidas analisadas: ${n}`);
 
 // ---- 4) agregação ----
 const POS = { TOP: 'TOP', JUNGLE: 'JUNGLE', MIDDLE: 'MID', BOTTOM: 'ADC', UTILITY: 'SUPORTE' };
-const champ = {};      // id → { games, wins, roles: { ROLE: { games, wins } } }
+const champ = {};      // id → { games, wins, roles: { ROLE: { games, wins } }, short, long }
 const matchup = {};    // `A|B|ROLE` → { games, wins } (vitórias de A contra B na mesma rota)
 const duo = {};        // `ADC|SUP` → { games, wins }
 const inc = (o, k, w) => { o[k] ??= { games: 0, wins: 0 }; o[k].games++; o[k].wins += w; };
@@ -94,6 +94,9 @@ for (const g of Object.values(games)) {
     champ[c] ??= { games: 0, wins: 0, roles: {} };
     champ[c].games++; champ[c].wins += win;
     inc(champ[c].roles, role, win);
+    // Jogos curtos (< 25 min) x longos (> 32 min): mostra quem é forte no começo e quem escala.
+    if (g.duration < 1500) inc(champ[c], 'short', win);
+    else if (g.duration > 1920) inc(champ[c], 'long', win);
     const opp = g.p.find(x => x[1] === pos && x[2] !== team);
     if (opp) inc(matchup, `${c}|${opp[0]}|${role}`, win);
   }

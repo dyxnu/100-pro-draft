@@ -4,7 +4,7 @@
 // que não existem nos arquivos oficiais. Os ajustes ficam em CURATED e podem ser balanceados.
 import ddragon from './ddragon.json';
 import meraki from './meraki.json';
-import { roleWinrate } from './riot';
+import { roleWinrate, scalingDelta } from './riot';
 import type { Role } from '@/lib/auction/engine';
 import type { ChampClass, ChampionCard } from './card-types';
 
@@ -116,7 +116,11 @@ export function buildCard(id: string, routes: Role[]): ChampionCard {
     CTR: clamp(scale10(blend(c.cc, r10(m?.ratings?.control), 0.4))),
     UTL: clamp(scale10(blend(c.util, r10(m?.ratings?.utility), 0.4))),
   };
-  const curve = { early: c.early, mid: c.mid, late: c.late };
+  // Curva de força: base curada, ajustada pelos dados reais de jogos curtos x longos (até ±1,5).
+  const sc = scalingDelta(id);
+  const shift = sc ? Math.max(-1.5, Math.min(1.5, sc.delta * 15)) : 0;
+  const r1 = (v: number) => Math.max(0, Math.min(10, Math.round(v * 10) / 10));
+  const curve = { early: r1(c.early - shift), mid: c.mid, late: r1(c.late + shift) };
   const dmg = Math.max(attrs.ATQ, attrs.MAG);
 
   const ovr = {} as Record<Role, number>;
