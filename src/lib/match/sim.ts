@@ -117,7 +117,7 @@ export function simulateMatch(a: MatchTeam, b: MatchTeam, seed: number, opts: Si
     return lastT;
   };
   // "Forma do dia": cada time tem um pouco de sorte/azar na partida (zebras acontecem).
-  const form = [(rand() - 0.5) * 6, (rand() - 0.5) * 6];
+  const form = [(rand() - 0.5) * 8, (rand() - 0.5) * 8];
 
   // --- forÃ§a -----------------------------------------------------------------
   function champPower(k: PlayerKey, t: number) {
@@ -146,7 +146,7 @@ export function simulateMatch(a: MatchTeam, b: MatchTeam, seed: number, opts: Si
     let p = sum / 5 + form[s];
     p += teamClassEdge(s) * 0.12 + prof[s].synergy * 0.8;
     p *= fit[s];
-    p += ((st.gold[s] - st.gold[o]) / 1000) * 1.1;
+    p += ((st.gold[s] - st.gold[o]) / 1000) * 0.8; // efeito bola de neve do ouro
     if (st.baronUntil[s] > t) p += 5;
     p += st.dragons[s] * 0.8 + (st.dragons[s] >= 4 ? 4 : 0);
     if (cur[s].agressividade === 'agressiva' && t < 900) p += 1.5;
@@ -158,7 +158,7 @@ export function simulateMatch(a: MatchTeam, b: MatchTeam, seed: number, opts: Si
     let e = 0;
     for (const r of LANE_ROLES[lane]) {
       const mine = card(key(s, r));
-      for (const r2 of LANE_ROLES[lane]) e += matchupEdge(mine, card(key(o, r2))) * 0.5;
+      for (const r2 of LANE_ROLES[lane]) e += matchupEdge(mine, card(key(o, r2)), r2 === r ? r : undefined) * 0.5;
       e += (champPower(key(s, r), t) - champPower(key(o, r), t)) / 4;
     }
     return e;
@@ -178,7 +178,7 @@ export function simulateMatch(a: MatchTeam, b: MatchTeam, seed: number, opts: Si
 
   function teamfight(t: number, at: Pt, where: string): Side {
     const pA = teamPower(0, t), pB = teamPower(1, t);
-    const pAWin = 0.5 + (sigmoid((pA - pB) / 6.5) - 0.5) / ((risk(0) + risk(1)) / 2);
+    const pAWin = 0.5 + (sigmoid((pA - pB) / 8) - 0.5) / ((risk(0) + risk(1)) / 2);
     const w: Side = rand() < Math.max(0.05, Math.min(0.95, pAWin)) ? 0 : 1;
     const l = (1 - w) as Side;
     const aw = alive(w, t), al = alive(l, t);
@@ -444,7 +444,7 @@ export function preMatchChance(a: MatchTeam, b: MatchTeam): number {
   const base = (t: MatchTeam) => ROLES.reduce((s, r) => s + t.cards[r].ovr[r], 0) / 5;
   let edge = 0;
   for (const ra of ROLES) for (const rb of ROLES) edge += classEdge(a.cards[ra].champClass, b.cards[rb].champClass);
-  for (const r of ROLES) edge += matchupEdge(a.cards[r], b.cards[r]) * 0.5;
+  for (const r of ROLES) edge += matchupEdge(a.cards[r], b.cards[r], r) * 0.5;
   const x = (base(a) * styleFit(pa, a.strategy) - base(b) * styleFit(pb, b.strategy)) + (pa.synergy - pb.synergy) * 0.8 + edge * 0.15;
   return sigmoid(x / 3.2);
 }

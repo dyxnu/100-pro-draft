@@ -10,8 +10,10 @@
     "test": "vitest run",
     "typecheck": "tsc --noEmit",
     "sync:champions": "node scripts/sync-ddragon.mjs",
-    "check:db":"node scripts/check-supabase.mjs",
-    "test:db": "cross-env RUN_DB_TESTS=1 vitest run src/lib/rooms"
+    "check:db": "node scripts/check-supabase.mjs",
+    "test:db": "cross-env RUN_DB_TESTS=1 vitest run src/lib/rooms",
+    "sync:meraki": "node scripts/sync-meraki.mjs",
+    "riot:collect": "node scripts/riot-collect.mjs"
   },
   "dependencies": {
     "@supabase/ssr": "^0.12.7",

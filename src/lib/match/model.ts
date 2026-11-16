@@ -1,5 +1,6 @@
 // Modelo de confronto: counters, sinergias, composição e estratégias.
 import type { Role } from '@/lib/auction/engine';
+import { duoWinrate, laneMatchup } from '@/lib/champions/riot';
 import type { ChampClass, ChampionCard } from '@/lib/champions/cards';
 
 // ---------------------------------------------------------------------------
@@ -66,8 +67,12 @@ export const SPECIFIC_COUNTERS: Record<string, string[]> = {
   Kaisa: ['Caitlyn', 'Ashe'],
 };
 
-/** Vantagem de A sobre B (≈ −4 a +4). */
-export function matchupEdge(a: ChampionCard, b: ChampionCard): number {
+/** Vantagem de A sobre B (≈ −4 a +4). Na mesma rota, usa o matchup real de alto elo quando há amostra. */
+export function matchupEdge(a: ChampionCard, b: ChampionCard, role?: Role): number {
+  if (role) {
+    const real = laneMatchup(a.id, b.id, role);
+    if (real) return Math.max(-4, Math.min(4, (real.wr - 0.5) * 25));
+  }
   let edge = classEdge(a.champClass, b.champClass);
   if (SPECIFIC_COUNTERS[a.id]?.includes(b.id)) edge += 2;
   if (SPECIFIC_COUNTERS[b.id]?.includes(a.id)) edge -= 2;
@@ -119,9 +124,14 @@ export function teamProfile(cards: Record<Role, ChampionCard>): TeamProfile {
   const syn = SYNERGIES.filter(s => ids.has(s.pair[0]) && ids.has(s.pair[1]));
   const avg = (f: (c: ChampionCard) => number) => list.reduce((a, c) => a + f(c), 0) / list.length;
   const top = cards.TOP;
+  // Dupla do bot com winrate real (quando coletado) vira bônus ou penalidade de sinergia.
+  const duo = cards.ADC && cards.SUPORTE ? duoWinrate(cards.ADC.id, cards.SUPORTE.id) : null;
+  const duoBonus = duo ? Math.max(-2, Math.min(3, (duo.wr - 0.5) * 30)) : 0;
+  const labels = syn.map(s => `${s.label} (${s.pair.join(' + ')})`);
+  if (duo) labels.push(`Dupla do bot: ${(duo.wr * 100).toFixed(1)}% de vitórias em ${duo.games} partidas`);
   return {
-    synergy: syn.reduce((a, s) => a + s.bonus, 0),
-    synergyLabels: syn.map(s => `${s.label} (${s.pair.join(' + ')})`),
+    synergy: syn.reduce((a, s) => a + s.bonus, 0) + duoBonus,
+    synergyLabels: labels,
     engage: Math.max(...list.map(c => c.engage)),
     frontline: list.filter(c => c.attrs.DEF >= 70).length,
     teamfight: Math.min(10, avg(c => c.aoe) * 0.6 + Math.max(...list.map(c => c.engage)) * 0.4),

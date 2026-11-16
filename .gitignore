@@ -42,3 +42,6 @@ next-env.d.ts
 
 # exemplo de variáveis pode ir para o Git
 !.env.example
+
+# cache da coleta da API da Riot
+.riot-cache/

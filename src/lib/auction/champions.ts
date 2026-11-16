@@ -43,4 +43,5 @@ export const STARTER_CHAMPIONS: Champion[] = [
   { id: 'Vayne', name: 'Vayne', routes: ['ADC', 'TOP'], tier: 3 },
   { id: 'Nami', name: 'Nami', routes: ['SUPORTE'], tier: 2 },
   { id: 'Blitzcrank', name: 'Blitzcrank', routes: ['SUPORTE'], tier: 2 },
+  { id: 'Diana', name: 'Diana', routes: ['JUNGLE', 'MID'], tier: 3 },
 ];

@@ -22,6 +22,9 @@ export interface ChampionCard {
   ovr: Record<Role, number>;
   bestOvr: number;
   patch: string;
+  roles: string[];                                         // funções oficiais (Assassino, Mergulhador…)
+  abilities: { key: 'P' | 'Q' | 'W' | 'E' | 'R'; name: string; text: string }[];
+  winrates: Partial<Record<Role, { wr: number; games: number }>>; // dados reais de alto elo, se coletados
 }
 
 export function cardTier(ovr: number): 'icone' | 'ouro' | 'prata' | 'bronze' {

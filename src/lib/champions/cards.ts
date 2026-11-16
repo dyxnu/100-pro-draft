@@ -3,6 +3,8 @@
 // atributos base) + ajustes por kit (controle, mobilidade, utilidade, fases de força),
 // que não existem nos arquivos oficiais. Os ajustes ficam em CURATED e podem ser balanceados.
 import ddragon from './ddragon.json';
+import meraki from './meraki.json';
+import { roleWinrate } from './riot';
 import type { Role } from '@/lib/auction/engine';
 import type { ChampClass, ChampionCard } from './card-types';
 
@@ -62,6 +64,7 @@ export const CURATED: Record<string, Curated> = {
   Vayne:       { cc: 4, dashes: 2, util: 0, early: 3, mid: 6, late: 10, engage: 1, aoe: 1 },
   Nami:        { cc: 8, dashes: 0, util: 9, early: 7, mid: 7, late: 7, engage: 5, aoe: 5 },
   Blitzcrank:  { cc: 8, dashes: 0, util: 5, early: 8, mid: 6, late: 5, engage: 8, aoe: 2 },
+  Diana:       { cc: 5, dashes: 1, util: 1, early: 6, mid: 8, late: 7, engage: 8, aoe: 8 },
 };
 
 const DEFAULT_CURATED: Curated = { cc: 5, dashes: 1, util: 3, early: 6, mid: 7, late: 6, engage: 4, aoe: 4 };
@@ -71,6 +74,13 @@ const CLASS_BY_TAG: Record<string, ChampClass> = {
 };
 type DD = { version: string; champions: Record<string, { name: string; title: string; tags: string[]; info: { attack: number; defense: number; magic: number; difficulty: number }; stats: { hp: number; armor: number; mr: number; moveSpeed: number; range: number } }> };
 const DATA = ddragon as DD;
+type MerakiAbility = { name: string; damageType: string | null; text: string } | null;
+type MerakiChamp = {
+  ratings?: { damage: number; toughness: number; control: number; mobility: number; utility: number };
+  roles?: string[]; positions?: string[]; adaptiveType?: string;
+  abilities: Record<'P' | 'Q' | 'W' | 'E' | 'R', MerakiAbility>;
+};
+const MERAKI = meraki as unknown as Record<string, MerakiChamp>;
 
 const clamp = (v: number, lo = 40, hi = 99) => Math.max(lo, Math.min(hi, Math.round(v)));
 const scale10 = (v: number) => 40 + (v / 10) * 59; // 0–10 → 40–99
@@ -92,13 +102,19 @@ export function buildCard(id: string, routes: Role[]): ChampionCard {
   const durability = norm(d.stats.hp * (1 + (d.stats.armor + d.stats.mr) / 100), 900, 1250);
   const speed = norm(d.stats.moveSpeed, 320, 350);
 
+  // Avaliações oficiais (Meraki/Riot, escala 1–3) refinam os atributos quando existem.
+  const m = MERAKI[id];
+  const r10 = (v?: number) => (v == null ? null : ((v - 1) / 2) * 10);
+  const blend = (base: number, rating: number | null, w: number) => (rating == null ? base : base * (1 - w) + rating * w);
+  const magic = m?.adaptiveType === 'MAGIC_DAMAGE';
+  const dmgRating = r10(m?.ratings?.damage);
   const attrs = {
-    ATQ: clamp(scale10(d.info.attack)),
-    MAG: clamp(scale10(d.info.magic)),
-    DEF: clamp(scale10(0.65 * d.info.defense + 0.35 * durability)),
-    MOB: clamp(scale10(0.4 * speed + 0.6 * (c.dashes / 3) * 10)),
-    CTR: clamp(scale10(c.cc)),
-    UTL: clamp(scale10(c.util)),
+    ATQ: clamp(scale10(blend(d.info.attack, magic ? null : dmgRating, 0.35))),
+    MAG: clamp(scale10(blend(d.info.magic, magic ? dmgRating : null, 0.35))),
+    DEF: clamp(scale10(blend(0.65 * d.info.defense + 0.35 * durability, r10(m?.ratings?.toughness), 0.4))),
+    MOB: clamp(scale10(blend(0.4 * speed + 0.6 * (c.dashes / 3) * 10, r10(m?.ratings?.mobility), 0.4))),
+    CTR: clamp(scale10(blend(c.cc, r10(m?.ratings?.control), 0.4))),
+    UTL: clamp(scale10(blend(c.util, r10(m?.ratings?.utility), 0.4))),
   };
   const curve = { early: c.early, mid: c.mid, late: c.late };
   const dmg = Math.max(attrs.ATQ, attrs.MAG);
@@ -113,17 +129,40 @@ export function buildCard(id: string, routes: Role[]): ChampionCard {
     const idx = routes.indexOf(role);
     if (idx === 1) o -= 3;         // rota secundária
     else if (idx >= 2) o -= 6;     // terciária
+    // Winrate real em alto elo (quando coletado): cada ponto percentual acima de 50% vale ~0,4 de overall.
+    const wr = roleWinrate(id, role);
+    if (wr) o += Math.max(-4, Math.min(4, (wr.wr - 0.5) * 40));
     ovr[role] = clamp(o, 20, 99);
   }
   // Fora das rotas do campeão vale metade da nota (regra do 100pracada).
   const inRole = Math.max(...routes.map(r => ovr[r]));
   for (const role of Object.keys(ovr) as Role[]) if (!routes.includes(role)) ovr[role] = Math.round(inRole / 2);
 
+  const winrates: ChampionCard['winrates'] = {};
+  for (const role of routes) { const w = roleWinrate(id, role); if (w) winrates[role] = w; }
+
   return {
     id, name: d.name, title: d.title,
-    champClass: CLASS_BY_TAG[d.tags[0]] ?? 'lutador',
+    champClass: classOf(d.tags, m?.roles ?? []),
     tags: d.tags, attrs, curve, engage: c.engage, aoe: c.aoe,
     ranged: d.stats.range >= 300, difficulty: d.info.difficulty,
     ovr, bestOvr: Math.max(...Object.values(ovr)), patch: DATA.version,
+    roles: (m?.roles ?? []).map(x => ROLE_PT[x] ?? x),
+    abilities: m ? (['P', 'Q', 'W', 'E', 'R'] as const).flatMap(k => (m.abilities[k] ? [{ key: k, name: m.abilities[k]!.name, text: m.abilities[k]!.text }] : [])) : [],
+    winrates,
   };
 }
+
+// Classe dos counters: a classe oficial do Data Dragon, corrigida pelo Meraki só nos casos claros.
+function classOf(tags: string[], roles: string[]): ChampClass {
+  if (roles.includes('MARKSMAN')) return 'atirador';
+  if (roles.includes('ENCHANTER')) return 'encantador';
+  if (roles.includes('VANGUARD') || roles.includes('WARDEN')) return 'tanque';
+  return CLASS_BY_TAG[tags[0]] ?? 'lutador';
+}
+const ROLE_PT: Record<string, string> = {
+  ASSASSIN: 'Assassino', MARKSMAN: 'Atirador', ENCHANTER: 'Encantador', CATCHER: 'Capturador', TANK: 'Tanque',
+  VANGUARD: 'Vanguarda', WARDEN: 'Guardião', MAGE: 'Mago', BURST: 'Explosivo', BATTLEMAGE: 'Mago de batalha',
+  ARTILLERY: 'Artilharia', FIGHTER: 'Lutador', DIVER: 'Mergulhador', JUGGERNAUT: 'Colosso', SKIRMISHER: 'Escaramuçador',
+  SUPPORT: 'Suporte', SPECIALIST: 'Especialista',
+};
