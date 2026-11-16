@@ -4,8 +4,8 @@ import { useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
 import { ROLES, type AuctionState, type Role } from '@/lib/auction/engine';
 import type { ClientAction } from '@/lib/rooms/types';
-import { STRATEGY_OPTIONS, type Strategy } from '@/lib/match/model';
-import { preMatchChance } from '@/lib/match/sim';
+import { STRATEGY_OPTIONS, type Strategy, teamProfile } from '@/lib/match/model';
+import { estimateWinChance } from '@/lib/match/sim';
 import {
   type TMatch, type TeamEntry, type TournamentState,
   matchResult, matchTeam, playingMatchOf, roundMatches, teamCards, teamRating,
@@ -149,8 +149,9 @@ function LineupStage({ s, t, me, match, act, pending }: {
   const cards = useMemo(() => teamCards(team, s.champions), [team, s.champions]);
   const chance = useMemo(() => {
     const mine = matchTeam(team, s.champions), theirs = matchTeam(opp, s.champions);
-    return preMatchChance(mine, theirs);
+    return estimateWinChance(mine, theirs);
   }, [team, opp, s.champions]);
+  const issues = useMemo(() => teamProfile(matchTeam(team, s.champions).cards).compIssues, [team, s.champions]);
   const playing = roundMatches(t).flatMap(m => (m.a && m.b ? [m.a, m.b] : []));
   const readyCount = playing.filter(id => t.teams[id].ready).length;
 
@@ -201,6 +202,9 @@ function LineupStage({ s, t, me, match, act, pending }: {
           <div className="bar"><span style={{ width: `${chance * 100}%` }} /></div>
           <small>Muda com a escalação e a estratégia. Zebra acontece.</small>
         </div>
+        {issues.length > 0 && (
+          <p className="comp-warn">⚠ Composição: {issues.join(', ')}. Times assim rendem menos em batalha.</p>
+        )}
         <button className={team.ready ? 'btn-secondary w-full' : 'btn-primary w-full'} disabled={pending} onClick={() => act({ type: 'ready', ready: !team.ready })}>
           {team.ready ? 'Pronto! (clique para desfazer)' : 'Pronto para o jogo'}
         </button>

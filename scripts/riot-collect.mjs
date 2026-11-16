@@ -5,7 +5,7 @@
 // Uso: npm run riot:collect -- --matches 1500 --platform br1
 // A chave de desenvolvimento permite 100 pedidos a cada 2 minutos: 1500 partidas ≈ 35 min.
 // O progresso fica salvo em .riot-cache/ — dá para parar e continuar depois.
-import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, readdirSync, readFileSync, writeFileSync } from 'node:fs';
 
 process.loadEnvFile('.env.local');
 const KEY = process.env.RIOT_API_KEY;
@@ -80,13 +80,19 @@ for (const id of matchIds) {
 save(`games-${PLATFORM}`, games);
 console.log(`\nPartidas analisadas: ${n}`);
 
-// ---- 4) agregação ----
+// ---- 4) agregação (junta todas as regiões já coletadas em .riot-cache/) ----
+const allGames = {};
+const platforms = [];
+for (const f of readdirSync(CACHE).filter(f => /^games-.+\.json$/.test(f))) {
+  platforms.push(f.slice(6, -5));
+  Object.assign(allGames, JSON.parse(readFileSync(`${CACHE}/${f}`, 'utf8')));
+}
 const POS = { TOP: 'TOP', JUNGLE: 'JUNGLE', MIDDLE: 'MID', BOTTOM: 'ADC', UTILITY: 'SUPORTE' };
 const champ = {};      // id → { games, wins, roles: { ROLE: { games, wins } }, short, long }
 const matchup = {};    // `A|B|ROLE` → { games, wins } (vitórias de A contra B na mesma rota)
 const duo = {};        // `ADC|SUP` → { games, wins }
 const inc = (o, k, w) => { o[k] ??= { games: 0, wins: 0 }; o[k].games++; o[k].wins += w; };
-for (const g of Object.values(games)) {
+for (const g of Object.values(allGames)) {
   if (!g) continue;
   for (const [c, pos, team, win] of g.p) {
     const role = POS[pos];
@@ -110,10 +116,10 @@ for (const g of Object.values(games)) {
 const catalog = new Set([...readFileSync('src/lib/auction/champions.ts', 'utf8').matchAll(/id: '([A-Za-z]+)'/g)].map(m => m[1]));
 const pick = (o, f) => Object.fromEntries(Object.entries(o).filter(([k, v]) => f(k, v)));
 const inCatalog = k => k.split('|').slice(0, 2).every(c => catalog.has(c));
-const total = Object.values(games).filter(Boolean).length;
-const patches = [...new Set(Object.values(games).filter(Boolean).map(g => g.patch))];
+const total = Object.values(allGames).filter(Boolean).length;
+const patches = [...new Set(Object.values(allGames).filter(Boolean).map(g => g.patch))];
 writeFileSync('src/lib/champions/riot-stats.json', JSON.stringify({
-  source: `Riot Match-V5 · ${PLATFORM} · Challenger/GM/Master · solo/duo`,
+  source: `Riot Match-V5 · ${platforms.join(", ")} · Challenger/GM/Master · solo/duo`,
   collectedAt: new Date().toISOString(), matches: total, patches,
   champions: pick(champ, k => catalog.has(k)),
   matchups: pick(matchup, (k, v) => inCatalog(k) && v.games >= 3),

@@ -1,4 +1,4 @@
-﻿// Motor de simulaÃ§Ã£o de partidas (determinÃ­stico pela seed: o servidor decide,
+﻿// Motor de simulação de partidas (determinístico pela seed: o servidor decide,
 // todos assistem exatamente o mesmo jogo). Tempo em segundos de jogo.
 import { ROLES, type Role } from '@/lib/auction/engine';
 import type { ChampionCard } from '@/lib/champions/cards';
@@ -14,11 +14,11 @@ export type PlayerKey = `${Side}-${Role}`;
 export type MatchEventType =
   | 'kill' | 'gank' | 'teamfight' | 'tower' | 'inhibitor' | 'nexus_tower' | 'nexus' | 'dragon' | 'baron' | 'tactic';
 
-/** MudanÃ§a de tÃ¡tica durante a partida (a partir do segundo de jogo `t`). */
+/** Mudança de tática durante a partida (a partir do segundo de jogo `t`). */
 export interface TacticChange { t: number; side: Side; strategy: Strategy }
 export interface SimOptions {
   changes?: TacticChange[];
-  /** Lados controlados por bot: ajustam a tÃ¡tica sozinhos conforme o placar. */
+  /** Lados controlados por bot: ajustam a tática sozinhos conforme o placar. */
   adaptive?: [boolean, boolean];
 }
 
@@ -49,7 +49,7 @@ export interface MatchResult {
   teams: [TeamStats, TeamStats];
   mvp: PlayerKey;
   profiles: [TeamProfile, TeamProfile];
-  preMatchWinChanceA: number; // 0â€“1
+  preMatchWinChanceA: number; // 0–1
 }
 
 const MAX_TIME = 45 * 60;
@@ -58,6 +58,11 @@ const LANE_ROLES: Record<Lane, Role[]> = { TOP: ['TOP'], MID: ['MID'], BOT: ['AD
 const AGGR = { defensiva: 0.75, equilibrada: 1, agressiva: 1.35 } as const;
 const RISK = { conservador: 0.65, normal: 1, arriscado: 1.5 } as const;
 const sigmoid = (x: number) => 1 / (1 + Math.exp(-x));
+const OVR_PIVOT = 75;
+const OVR_WEIGHT = 0.65;
+const W_CLASS = 0.2;
+const W_SYNERGY = 1.2;
+const W_COMP = 1.2;
 const lerp = (a: number, b: number, f: number) => a + (b - a) * Math.max(0, Math.min(1, f));
 const fmtTime = (t: number) => `${Math.floor(t / 60)}:${String(Math.floor(t % 60)).padStart(2, '0')}`;
 
@@ -75,7 +80,7 @@ export function simulateMatch(a: MatchTeam, b: MatchTeam, seed: number, opts: Si
   const rand = makeRng(seed);
   const teams = [a, b] as const;
   const prof: [TeamProfile, TeamProfile] = [teamProfile(a.cards), teamProfile(b.cards)];
-  // TÃ¡tica atual de cada lado (muda durante a partida).
+  // Tática atual de cada lado (muda durante a partida).
   const cur: [Strategy, Strategy] = [{ ...a.strategy }, { ...b.strategy }];
   const fit = [styleFit(prof[0], cur[0]), styleFit(prof[1], cur[1])];
   const aggr = (s: Side) => AGGR[cur[s].agressividade];
@@ -119,12 +124,15 @@ export function simulateMatch(a: MatchTeam, b: MatchTeam, seed: number, opts: Si
   // "Forma do dia": cada time tem um pouco de sorte/azar na partida (zebras acontecem).
   const form = [(rand() - 0.5) * 8, (rand() - 0.5) * 8];
 
-  // --- forÃ§a -----------------------------------------------------------------
+  // --- força -----------------------------------------------------------------
   function champPower(k: PlayerKey, t: number) {
     const c = card(k);
     const m = t / 60;
     const curve = m < 14 ? lerp(c.curve.early, c.curve.mid, m / 14) : lerp(c.curve.mid, c.curve.late, (m - 14) / 12);
-    return c.ovr[k.slice(2) as Role] * (0.85 + curve * 0.03);
+    // O overall pesa, mas comprimido: a diferença entre cartas conta ~55% do valor bruto,
+    // para que counters, sinergia, composição e tática decidam mais partidas.
+    const ovr = c.ovr[k.slice(2) as Role];
+    return (OVR_PIVOT + (ovr - OVR_PIVOT) * OVR_WEIGHT) * (0.85 + curve * 0.03);
   }
   let classEdgeCache: [number, number] | null = null;
   function teamClassEdge(s: Side) {
@@ -144,7 +152,7 @@ export function simulateMatch(a: MatchTeam, b: MatchTeam, seed: number, opts: Si
       sum += champPower(k, t);
     }
     let p = sum / 5 + form[s];
-    p += teamClassEdge(s) * 0.12 + prof[s].synergy * 0.8;
+    p += teamClassEdge(s) * W_CLASS + prof[s].synergy * W_SYNERGY + prof[s].comp * W_COMP;
     p *= fit[s];
     p += ((st.gold[s] - st.gold[o]) / 1000) * 0.8; // efeito bola de neve do ouro
     if (st.baronUntil[s] > t) p += 5;
@@ -206,7 +214,7 @@ export function simulateMatch(a: MatchTeam, b: MatchTeam, seed: number, opts: Si
     const ace = victims.length === al.length && al.length === 5;
     push({
       t, type: 'teamfight', side: w, at, actors: aw, victims: [...victims, ...lostOnWinner], big: true,
-      text: `${fmtTime(t)} Â· Team fight ${where}! ${teamName(w)} vence ${victims.length} a ${lostOnWinner.length}${ace ? ' â€” ACE!' : ''}`,
+      text: `${fmtTime(t)} · Team fight ${where}! ${teamName(w)} vence ${victims.length} a ${lostOnWinner.length}${ace ? ' — ACE!' : ''}`,
     });
     return w;
   }
@@ -216,14 +224,14 @@ export function simulateMatch(a: MatchTeam, b: MatchTeam, seed: number, opts: Si
     const o = (1 - s) as Side;
     const anyInhib = LANES.some(l => st.inhibDown[o][l]);
     if (anyInhib && st.nexusTowersLost[o] === 2) {
-      endTime = push({ t, type: 'nexus', side: s, at: NEXUS[o], actors: alive(s, t), victims: [], big: true, text: `${fmtTime(Math.max(t, lastT))} Â· ${teamName(s)} destrÃ³i o Nexus! VITÃ“RIA!` });
+      endTime = push({ t, type: 'nexus', side: s, at: NEXUS[o], actors: alive(s, t), victims: [], big: true, text: `${fmtTime(Math.max(t, lastT))} · ${teamName(s)} destrói o Nexus! VITÓRIA!` });
       winner = s;
       return true;
     }
     if (anyInhib && st.nexusTowersLost[o] < 2 && (rand() < 0.6 || LANES.every(l => st.inhibDown[o][l]))) {
       const i = st.nexusTowersLost[o]++;
       st.gold[s] += 50;
-      push({ t, type: 'nexus_tower', side: s, at: nexusTowerPos(o, i), actors: alive(s, t), victims: [], text: `${fmtTime(t)} Â· ${teamName(s)} derruba uma torre do Nexus` });
+      push({ t, type: 'nexus_tower', side: s, at: nexusTowerPos(o, i), actors: alive(s, t), victims: [], text: `${fmtTime(t)} · ${teamName(s)} derruba uma torre do Nexus` });
       return true;
     }
     const lanes = [...LANES].sort((x, y) => {
@@ -237,14 +245,14 @@ export function simulateMatch(a: MatchTeam, b: MatchTeam, seed: number, opts: Si
         st.gold[s] += 550;
         push({
           t, type: 'tower', side: s, lane, at: towerPos(o, lane, tier), actors: alive(s, t), victims: [],
-          text: `${fmtTime(t)} Â· ${teamName(s)} destrÃ³i a torre ${['externa', 'interna', 'do inibidor'][tier]} do ${lane === 'BOT' ? 'bot' : lane === 'MID' ? 'mid' : 'top'}`,
+          text: `${fmtTime(t)} · ${teamName(s)} destrói a torre ${['externa', 'interna', 'do inibidor'][tier]} do ${lane === 'BOT' ? 'bot' : lane === 'MID' ? 'mid' : 'top'}`,
         });
         return true;
       }
       if (!st.inhibDown[o][lane]) {
         st.inhibDown[o][lane] = true;
         st.gold[s] += 50;
-        push({ t, type: 'inhibitor', side: s, lane, at: inhibPos(o, lane), actors: alive(s, t), victims: [], big: true, text: `${fmtTime(t)} Â· ${teamName(s)} destrÃ³i o inibidor do ${lane.toLowerCase()}!` });
+        push({ t, type: 'inhibitor', side: s, lane, at: inhibPos(o, lane), actors: alive(s, t), victims: [], big: true, text: `${fmtTime(t)} · ${teamName(s)} destrói o inibidor do ${lane.toLowerCase()}!` });
         return true;
       }
     }
@@ -269,11 +277,11 @@ export function simulateMatch(a: MatchTeam, b: MatchTeam, seed: number, opts: Si
     if (before.risco !== next.risco) parts.push(`risco ${next.risco}`);
     push({
       t, type: 'tactic', side: s, at: NEXUS[s], actors: [], victims: [],
-      text: `${fmtTime(t)} Â· ${teamName(s)} muda a tÃ¡tica${byBot ? '' : ' ao vivo'}: ${parts.join(', ')}`,
+      text: `${fmtTime(t)} · ${teamName(s)} muda a tática${byBot ? '' : ' ao vivo'}: ${parts.join(', ')}`,
     });
   }
 
-  /** Bots reagem ao placar a cada 5 minutos: atrÃ¡s, arriscam; na frente, seguram. */
+  /** Bots reagem ao placar a cada 5 minutos: atrás, arriscam; na frente, seguram. */
   function botAdapt(s: Side, t: number) {
     const o = (1 - s) as Side;
     const killDiff = st.kills[s] - st.kills[o];
@@ -312,7 +320,7 @@ export function simulateMatch(a: MatchTeam, b: MatchTeam, seed: number, opts: Si
             registerKill(killer, victim, killers.filter(k => k !== killer), t);
             push({
               t, type: 'kill', side: w, lane, at: alongLane(lane, 0.5 + (w === 0 ? 0.04 : -0.04)), actors: killers, victims: [victim], big: first,
-              text: `${fmtTime(t)} Â· ${first ? 'FIRST BLOOD! ' : ''}${name(killer)} abate ${name(victim)} no ${lane.toLowerCase()}`,
+              text: `${fmtTime(t)} · ${first ? 'FIRST BLOOD! ' : ''}${name(killer)} abate ${name(victim)} no ${lane.toLowerCase()}`,
             });
           }
         }
@@ -334,14 +342,14 @@ export function simulateMatch(a: MatchTeam, b: MatchTeam, seed: number, opts: Si
             registerKill(killer, victim, gankers.filter(k => k !== killer), t);
             push({
               t, type: 'gank', side: s, lane, at: alongLane(lane, 0.5), actors: gankers, victims: [victim], big: first,
-              text: `${fmtTime(t)} Â· ${first ? 'FIRST BLOOD! ' : ''}Gank de ${name(jg)} no ${lane.toLowerCase()}: ${name(killer)} abate ${name(victim)}`,
+              text: `${fmtTime(t)} · ${first ? 'FIRST BLOOD! ' : ''}Gank de ${name(jg)} no ${lane.toLowerCase()}: ${name(killer)} abate ${name(victim)}`,
             });
           } else if (rand() < 0.35) {
             const killer = pick(targets, k => card(k).attrs.ATQ + card(k).attrs.MAG);
             registerKill(killer, jg, [], t);
             push({
               t, type: 'kill', side: o, lane, at: alongLane(lane, 0.5), actors: [killer], victims: [jg],
-              text: `${fmtTime(t)} Â· Gank frustrado! ${name(killer)} abate ${name(jg)} no ${lane.toLowerCase()}`,
+              text: `${fmtTime(t)} · Gank frustrado! ${name(killer)} abate ${name(jg)} no ${lane.toLowerCase()}`,
             });
           }
         }
@@ -357,11 +365,11 @@ export function simulateMatch(a: MatchTeam, b: MatchTeam, seed: number, opts: Si
       }
     }
 
-    // DragÃµes (atÃ© a alma: 4 dragÃµes)
+    // Dragões (até a alma: 4 dragões)
     if (t >= nextDragon && st.dragons[0] < 4 && st.dragons[1] < 4) {
       const contested = t >= 600 && rand() < 0.35 * avgAggr();
       let taker: Side;
-      if (contested) taker = teamfight(t, DRAGON_PIT, 'no dragÃ£o');
+      if (contested) taker = teamfight(t, DRAGON_PIT, 'no dragão');
       else {
         const bonus = (prio(0) === 'dragoes' ? 0.8 : 0) - (prio(1) === 'dragoes' ? 0.8 : 0);
         const x = laneEdge(0, 'BOT', t) * 0.3 + (champPower(key(0, 'JUNGLE'), t) - champPower(key(1, 'JUNGLE'), t)) / 8 + bonus;
@@ -372,20 +380,20 @@ export function simulateMatch(a: MatchTeam, b: MatchTeam, seed: number, opts: Si
       const soul = st.dragons[taker] === 4;
       push({
         t, type: 'dragon', side: taker, at: DRAGON_PIT, actors: alive(taker, t).filter(k => ['JUNGLE', 'ADC', 'SUPORTE', 'MID'].includes(k.slice(2))), victims: [], big: soul,
-        text: `${fmtTime(t)} Â· ${teamName(taker)} pega o ${st.dragons[taker]}Âº dragÃ£o${soul ? ' â€” ALMA DO DRAGÃƒO!' : ''}`,
+        text: `${fmtTime(t)} · ${teamName(taker)} pega o ${st.dragons[taker]}º dragão${soul ? ' — ALMA DO DRAGÃO!' : ''}`,
       });
       nextDragon = t + 5 * 60;
     }
 
-    // BarÃ£o
+    // Barão
     if (t >= nextBaron && rand() < 0.3) {
       const s: Side = teamPower(0, t) >= teamPower(1, t) ? 0 : 1;
-      const taker = rand() < 0.55 ? teamfight(t, BARON_PIT, 'no BarÃ£o') : s;
+      const taker = rand() < 0.55 ? teamfight(t, BARON_PIT, 'no Barão') : s;
       if (winner == null && alive(taker, t).length >= 3) {
         st.barons[taker]++;
         st.baronUntil[taker] = t + 180;
         st.gold[taker] += 1500;
-        push({ t, type: 'baron', side: taker, at: BARON_PIT, actors: alive(taker, t), victims: [], big: true, text: `${fmtTime(t)} Â· ${teamName(taker)} derrota o BARÃƒO!` });
+        push({ t, type: 'baron', side: taker, at: BARON_PIT, actors: alive(taker, t), victims: [], big: true, text: `${fmtTime(t)} · ${teamName(taker)} derrota o BARÃO!` });
         destroyNext(taker, t + 45);
         if (winner == null) destroyNext(taker, t + 60);
       }
@@ -396,7 +404,7 @@ export function simulateMatch(a: MatchTeam, b: MatchTeam, seed: number, opts: Si
     if (winner == null && t >= nextFight) {
       const lane = LANES[Math.floor(rand() * 3)];
       const w = teamfight(t, alongLane(lane, 0.5 + (rand() - 0.5) * 0.3), lane === 'MID' ? 'no meio' : `no ${lane.toLowerCase()}`);
-      // Depois de vencer a luta, o time empurra: Ã s vezes nada (recua para curar), Ã s vezes vÃ¡rias estruturas.
+      // Depois de vencer a luta, o time empurra: às vezes nada (recua para curar), às vezes várias estruturas.
       const n = (rand() < 0.75 ? 1 : 0) + (prio(w) === 'torres' ? 1 : 0) + (alive(1 - w as Side, t).length <= 1 ? 1 : 0) + (st.baronUntil[w] > t ? 1 : 0);
       for (let i = 1; i <= n && winner == null; i++) destroyNext(w, t + 15 + i * 25);
       nextFight = t + (130 + rand() * 170) / avgAggr();
@@ -413,7 +421,7 @@ export function simulateMatch(a: MatchTeam, b: MatchTeam, seed: number, opts: Si
     }
   }
 
-  // Morte sÃºbita aos 45 minutos
+  // Morte súbita aos 45 minutos
   let t = MAX_TIME;
   while (winner == null) {
     t += 40;
@@ -438,13 +446,28 @@ export function simulateMatch(a: MatchTeam, b: MatchTeam, seed: number, opts: Si
 
 const score = (p: PlayerStats) => p.kills * 3 + p.assists * 1.5 - p.deaths;
 
-/** Chance de vitÃ³ria estimada antes da partida (para mostrar na tela). */
+/**
+ * Chance de vitória medida simulando a partida várias vezes (seeds fixas, então o número é estável).
+ * Fica coerente com o simulador, inclusive counters de rota, composição e tática escolhida.
+ */
+export function estimateWinChance(a: MatchTeam, b: MatchTeam, runs = 60): number {
+  let wins = 0;
+  for (let i = 0; i < runs; i++) {
+    // metade das vezes com os lados trocados, para não haver viés de lado do mapa
+    if (i % 2 === 0) { if (simulateMatch(a, b, 7919 * (i + 1)).winner === 0) wins++; }
+    else if (simulateMatch(b, a, 7919 * (i + 1)).winner === 1) wins++;
+  }
+  return wins / runs;
+}
+
+/** Chance de vitória estimada antes da partida (para mostrar na tela). */
 export function preMatchChance(a: MatchTeam, b: MatchTeam): number {
   const pa = teamProfile(a.cards), pb = teamProfile(b.cards);
-  const base = (t: MatchTeam) => ROLES.reduce((s, r) => s + t.cards[r].ovr[r], 0) / 5;
+  const base = (t: MatchTeam) => ROLES.reduce((s, r) => s + OVR_PIVOT + (t.cards[r].ovr[r] - OVR_PIVOT) * OVR_WEIGHT, 0) / 5;
   let edge = 0;
-  for (const ra of ROLES) for (const rb of ROLES) edge += classEdge(a.cards[ra].champClass, b.cards[rb].champClass);
+  for (const ra of ROLES) for (const rb of ROLES) edge += classEdge(a.cards[ra].champClass, b.cards[rb].champClass) * (W_CLASS / 0.2);
   for (const r of ROLES) edge += matchupEdge(a.cards[r], b.cards[r], r) * 0.5;
-  const x = (base(a) * styleFit(pa, a.strategy) - base(b) * styleFit(pb, b.strategy)) + (pa.synergy - pb.synergy) * 0.8 + edge * 0.15;
+  const x = (base(a) * styleFit(pa, a.strategy) - base(b) * styleFit(pb, b.strategy)) + (pa.synergy - pb.synergy) * W_SYNERGY
+    + (pa.comp - pb.comp) * W_COMP + edge * 0.2;
   return sigmoid(x / 3.2);
 }

@@ -18,13 +18,17 @@ const STATS = data as unknown as RiotStats;
 export const RIOT_SAMPLE = { matches: STATS.matches, source: STATS.source, patches: STATS.patches, collectedAt: STATS.collectedAt };
 
 const MIN_ROLE_GAMES = 30;
-const MIN_MATCHUP_GAMES = 15;
-const MIN_DUO_GAMES = 15;
+const MIN_MATCHUP_GAMES = 6;
+const MIN_DUO_GAMES = 6;
+// Encolhimento bayesiano: com poucas partidas o número fica perto de 50%, e só se afasta
+// dele conforme a amostra cresce (evita que 4 vitórias em 6 jogos virem "counter").
+const PRIOR = 40;
+const shrink = (wins: number, games: number) => (wins + PRIOR / 2) / (games + PRIOR);
 
 /** Winrate do campeão na rota (0–1) e número de partidas; null se a amostra for pequena. */
 export function roleWinrate(champ: string, role: Role): { wr: number; games: number } | null {
   const r = STATS.champions[champ]?.roles?.[role];
-  return r && r.games >= MIN_ROLE_GAMES ? { wr: r.wins / r.games, games: r.games } : null;
+  return r && r.games >= MIN_ROLE_GAMES ? { wr: shrink(r.wins, r.games), games: r.games } : null;
 }
 
 /** Winrate de A contra B na mesma rota; null se a amostra for pequena. */
@@ -34,7 +38,7 @@ export function laneMatchup(a: string, b: string, role: Role): { wr: number; gam
   const games = (ab?.games ?? 0) + (ba?.games ?? 0);
   if (games < MIN_MATCHUP_GAMES) return null;
   const wins = (ab?.wins ?? 0) + ((ba?.games ?? 0) - (ba?.wins ?? 0));
-  return { wr: wins / games, games };
+  return { wr: shrink(wins, games), games };
 }
 
 const MIN_PHASE_GAMES = 20;
@@ -54,5 +58,5 @@ export function scalingDelta(champ: string): { delta: number; short: number; lon
 /** Winrate da dupla atirador + suporte; null se a amostra for pequena. */
 export function duoWinrate(adc: string, sup: string): { wr: number; games: number } | null {
   const d = STATS.duos[`${adc}|${sup}`];
-  return d && d.games >= MIN_DUO_GAMES ? { wr: d.wins / d.games, games: d.games } : null;
+  return d && d.games >= MIN_DUO_GAMES ? { wr: shrink(d.wins, d.games), games: d.games } : null;
 }

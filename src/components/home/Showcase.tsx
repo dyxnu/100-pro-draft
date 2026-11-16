@@ -1,7 +1,10 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import { ChampImg, ROLE_LABEL } from '@/components/draft/ui';
+import { ROLE_LABEL } from '@/components/draft/ui';
+
+// Ponto horizontal (0–100%) para centralizar o campeão na splash quando ela é recortada.
+const FOCUS: Record<string, number> = {};
 import type { Role } from '@/lib/auction/engine';
 
 export interface ShowcaseChamp { id: string; name: string; title: string; roles: string[]; routes: Role[] }
@@ -25,16 +28,24 @@ export function Showcase({ champs, stats }: { champs: ShowcaseChamp[]; stats: { 
           {paused ? '▶' : '❚❚'}
         </button>
       </div>
-      <div className="relative mx-3 h-[340px] overflow-hidden rounded-2xl bg-gradient-to-b from-[#2b2e6e] via-[#4b4fb5] to-[#8f86e6]">
-        <div className="absolute inset-0 bg-[radial-gradient(circle_at_70%_18%,rgba(255,255,255,.55)_0,rgba(255,255,255,0)_22%)]" />
-        <div key={c.id} className="anim-card-in absolute inset-0 flex flex-col items-center justify-end pb-4">
-          <div className="anim-float h-[260px] w-[150px] overflow-hidden rounded-xl shadow-[0_18px_30px_-10px_rgba(0,0,0,.6)] ring-2 ring-white/50">
-            <ChampImg id={c.id} name={c.name} big className="h-full w-full object-cover" />
-          </div>
-          <p className="mt-3 text-3xl font-black text-white drop-shadow-[0_2px_6px_rgba(0,0,0,.5)]">{c.name}</p>
-          <div className="mt-1 flex flex-wrap justify-center gap-1">
-            {c.routes.map(r => <span key={r} className="rounded-md bg-white/85 px-2 py-0.5 text-[11px] font-bold text-gold2">{ROLE_LABEL[r]}</span>)}
-            {c.roles.slice(0, 2).map(r => <span key={r} className="rounded-md bg-[#fff3c4]/90 px-2 py-0.5 text-[11px] font-bold text-[#7a6224]">{r}</span>)}
+      <div className="relative mx-3 h-[380px] overflow-hidden rounded-2xl bg-[#1d2148]">
+        {/* Splash art oficial ocupando o bloco todo, com zoom lento (efeito Ken Burns) e troca em fade */}
+        <div key={c.id} className="showcase-slide absolute inset-0">
+          <img
+            src={`https://ddragon.leagueoflegends.com/cdn/img/champion/centered/${c.id}_0.jpg`}
+            alt={c.name}
+            className="showcase-splash absolute inset-0 h-full w-full object-cover"
+            style={{ objectPosition: `${FOCUS[c.id] ?? 50}% 30%` }}
+          />
+          <div className="showcase-shine absolute inset-0" />
+          <div className="absolute inset-x-0 bottom-0 h-1/2 bg-gradient-to-t from-[#141738]/95 via-[#141738]/55 to-transparent" />
+          <div className="anim-fade-up absolute inset-x-0 bottom-0 flex flex-col items-center pb-5">
+            <p className="text-4xl font-black text-white drop-shadow-[0_2px_8px_rgba(0,0,0,.6)]">{c.name}</p>
+            <p className="text-sm font-semibold italic text-white/80">{c.title}</p>
+            <div className="mt-2 flex flex-wrap justify-center gap-1">
+              {c.routes.map(r => <span key={r} className="rounded-md bg-white/90 px-2 py-0.5 text-[11px] font-bold text-gold2">{ROLE_LABEL[r]}</span>)}
+              {c.roles.slice(0, 2).map(r => <span key={r} className="rounded-md bg-[#fff3c4]/90 px-2 py-0.5 text-[11px] font-bold text-[#7a6224]">{r}</span>)}
+            </div>
           </div>
         </div>
       </div>

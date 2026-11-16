@@ -71,7 +71,7 @@ export const SPECIFIC_COUNTERS: Record<string, string[]> = {
 export function matchupEdge(a: ChampionCard, b: ChampionCard, role?: Role): number {
   if (role) {
     const real = laneMatchup(a.id, b.id, role);
-    if (real) return Math.max(-4, Math.min(4, (real.wr - 0.5) * 25));
+    if (real) return Math.max(-4, Math.min(4, (real.wr - 0.5) * 40));
   }
   let edge = classEdge(a.champClass, b.champClass);
   if (SPECIFIC_COUNTERS[a.id]?.includes(b.id)) edge += 2;
@@ -110,6 +110,9 @@ export const SYNERGIES: { pair: [string, string]; bonus: number; label: string }
 export interface TeamProfile {
   synergy: number;
   synergyLabels: string[];
+  /** Equilíbrio da composição (−5 a 0): linha de frente, mistura de dano, iniciação e controle. */
+  comp: number;
+  compIssues: string[];
   teamfight: number; // 0–10
   pickoff: number;
   splitpush: number;
@@ -129,7 +132,19 @@ export function teamProfile(cards: Record<Role, ChampionCard>): TeamProfile {
   const duoBonus = duo ? Math.max(-2, Math.min(3, (duo.wr - 0.5) * 30)) : 0;
   const labels = syn.map(s => `${s.label} (${s.pair.join(' + ')})`);
   if (duo) labels.push(`Dupla do bot: ${(duo.wr * 100).toFixed(1)}% de vitórias em ${duo.games} partidas`);
+  // Composição: times sem tanque, só com um tipo de dano ou sem iniciação sofrem em partidas reais.
+  const compIssues: string[] = [];
+  let comp = 0;
+  const front = list.filter(c => c.attrs.DEF >= 70).length;
+  if (front === 0) { comp -= 2; compIssues.push('sem linha de frente'); }
+  const carriers = list.filter(c => c !== cards.SUPORTE);
+  const magic = carriers.filter(c => c.attrs.MAG > c.attrs.ATQ).length;
+  if (magic === 0) { comp -= 1.5; compIssues.push('só dano físico'); }
+  else if (magic === carriers.length) { comp -= 1.5; compIssues.push('só dano mágico'); }
+  if (Math.max(...list.map(c => c.engage)) < 6) { comp -= 1; compIssues.push('sem iniciação'); }
+  if (avg(c => c.attrs.CTR) < 58) { comp -= 0.5; compIssues.push('pouco controle'); }
   return {
+    comp, compIssues,
     synergy: syn.reduce((a, s) => a + s.bonus, 0) + duoBonus,
     synergyLabels: labels,
     engage: Math.max(...list.map(c => c.engage)),

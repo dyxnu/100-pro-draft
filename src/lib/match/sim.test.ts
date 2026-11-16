@@ -3,7 +3,7 @@ import { ROLES, type Role } from '@/lib/auction/engine';
 import { STARTER_CHAMPIONS } from '@/lib/auction/champions';
 import { buildCard, type ChampionCard } from '@/lib/champions/cards';
 import { DEFAULT_STRATEGY, type Strategy } from './model';
-import { type MatchTeam, preMatchChance, simulateMatch } from './sim';
+import { type MatchTeam, estimateWinChance, simulateMatch } from './sim';
 
 const routes = Object.fromEntries(STARTER_CHAMPIONS.map(c => [c.id, c.routes]));
 const team = (name: string, ids: string[], strategy: Strategy = DEFAULT_STRATEGY): MatchTeam => ({
@@ -46,13 +46,24 @@ describe('simulador de partidas', () => {
     expect(avg).toBeLessThan(40);
   });
 
-  it('time melhor vence mais, mas não sempre (zebra é possível)', () => {
-    let wins = 0;
-    for (let seed = 1; seed <= 400; seed++) if (simulateMatch(STRONG, WEAK, seed).winner === 0) wins++;
-    const rate = wins / 400;
-    console.log(`time forte vence ${(rate * 100).toFixed(0)}% contra o fraco; chance prevista ${(preMatchChance(STRONG, WEAK) * 100).toFixed(0)}%`);
-    expect(rate).toBeGreaterThan(0.6);
-    expect(rate).toBeLessThan(0.93);
+  it('overall maior ajuda, mas não decide sozinho (zebra é possível)', () => {
+    // Mesmo time forte, com um mago no meio para a composição ficar equilibrada.
+    const BALANCED = team('Fortes equilibrados', ['Malphite', 'LeeSin', 'Syndra', 'Jinx', 'Lulu']);
+    const rate = (x: MatchTeam) => [...Array(400).keys()].filter(s => simulateMatch(x, WEAK, s + 1).winner === 0).length / 400;
+    const r = rate(BALANCED);
+    console.log(`time forte e equilibrado vence ${(r * 100).toFixed(0)}% contra o fraco; chance estimada ${(estimateWinChance(BALANCED, WEAK) * 100).toFixed(0)}%`);
+    expect(r).toBeGreaterThan(0.58);
+    expect(r).toBeLessThan(0.8);
+    // Só dano físico (Yasuo no meio) custa caro: a vantagem de overall quase some.
+    const r2 = rate(STRONG);
+    console.log(`o mesmo time só com dano físico vence ${(r2 * 100).toFixed(0)}%`);
+    expect(r2).toBeLessThan(r - 0.04);
+  });
+
+  it('chance estimada acompanha o resultado das simulações', () => {
+    const c = estimateWinChance(STRONG, WEAK);
+    expect(c).toBeGreaterThan(0.4);
+    expect(c).toBeLessThan(0.8);
   });
 
   it('time fora de rota é atropelado', () => {

@@ -151,7 +151,7 @@ export function buildCard(id: string, routes: Role[]): ChampionCard {
     tags: d.tags, attrs, curve, engage: c.engage, aoe: c.aoe,
     ranged: d.stats.range >= 300, difficulty: d.info.difficulty,
     ovr, bestOvr: Math.max(...Object.values(ovr)), patch: DATA.version,
-    roles: (m?.roles ?? []).map(x => ROLE_PT[x] ?? x),
+    roles: displayRoles(id, m?.roles ?? []),
     abilities: m ? (['P', 'Q', 'W', 'E', 'R'] as const).flatMap(k => (m.abilities[k] ? [{ key: k, name: m.abilities[k]!.name, text: m.abilities[k]!.text }] : [])) : [],
     winrates,
   };
@@ -164,6 +164,31 @@ function classOf(tags: string[], roles: string[]): ChampClass {
   if (roles.includes('VANGUARD') || roles.includes('WARDEN')) return 'tanque';
   return CLASS_BY_TAG[tags[0]] ?? 'lutador';
 }
+// Classe oficial principal (classes da Riot). O Meraki lista as funções em ordem alfabética,
+// o que fazia "Assassino" aparecer primeiro para Jax, Vi, Lee Sin, Yasuo, Diana etc.
+const PRIMARY_ROLE: Record<string, string> = {
+  Garen: 'JUGGERNAUT', Darius: 'JUGGERNAUT', Sett: 'JUGGERNAUT',
+  Malphite: 'VANGUARD', Amumu: 'VANGUARD', Sejuani: 'VANGUARD', Leona: 'VANGUARD', Nautilus: 'VANGUARD',
+  Jax: 'SKIRMISHER', Fiora: 'SKIRMISHER', Yasuo: 'SKIRMISHER',
+  Camille: 'DIVER', Renekton: 'DIVER', Warwick: 'DIVER', Vi: 'DIVER', LeeSin: 'DIVER', XinZhao: 'DIVER', Diana: 'DIVER',
+  Ahri: 'BURST', Annie: 'BURST', Lux: 'BURST', Orianna: 'BURST', Syndra: 'BURST',
+  Zed: 'ASSASSIN', Ekko: 'ASSASSIN', Katarina: 'ASSASSIN',
+  Ashe: 'MARKSMAN', Jinx: 'MARKSMAN', Caitlyn: 'MARKSMAN', MissFortune: 'MARKSMAN', Kaisa: 'MARKSMAN',
+  Jhin: 'MARKSMAN', Ezreal: 'MARKSMAN', Vayne: 'MARKSMAN', Graves: 'SPECIALIST',
+  Soraka: 'ENCHANTER', Lulu: 'ENCHANTER', Nami: 'ENCHANTER',
+  Morgana: 'CATCHER', Thresh: 'CATCHER', Blitzcrank: 'CATCHER',
+};
+// Funções genéricas só aparecem se não houver nada mais específico.
+const GENERIC = new Set(['FIGHTER', 'MAGE', 'SUPPORT', 'TANK']);
+function displayRoles(id: string, roles: string[]): string[] {
+  const primary = PRIMARY_ROLE[id] ?? roles.find(r => !GENERIC.has(r)) ?? roles[0];
+  if (!primary) return [];
+  // Segunda etiqueta: outra função específica, sem "Assassino" para quem não é assassino de verdade.
+  const second = roles.find(r => r !== primary && !GENERIC.has(r) && r !== 'ASSASSIN')
+    ?? roles.find(r => r !== primary && GENERIC.has(r));
+  return [primary, second].filter((x): x is string => !!x).map(x => ROLE_PT[x] ?? x);
+}
+
 const ROLE_PT: Record<string, string> = {
   ASSASSIN: 'Assassino', MARKSMAN: 'Atirador', ENCHANTER: 'Encantador', CATCHER: 'Capturador', TANK: 'Tanque',
   VANGUARD: 'Vanguarda', WARDEN: 'Guardião', MAGE: 'Mago', BURST: 'Explosivo', BATTLEMAGE: 'Mago de batalha',

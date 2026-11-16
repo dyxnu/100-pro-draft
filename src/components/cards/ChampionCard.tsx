@@ -40,12 +40,6 @@ export function ChampionCard({ card, role, size = 'md', onClick, selected }: {
           ))}
         </div>
       )}
-      {size === 'md' && card.winrates[shownRole] && (
-        <div className="nx-wr" title="Winrate real em partidas ranqueadas de alto elo (Challenger, GM e Mestre do BR)">
-          WR alto elo <b className={card.winrates[shownRole]!.wr >= 0.5 ? 'up' : 'down'}>{(card.winrates[shownRole]!.wr * 100).toFixed(1)}%</b>
-          <small>{card.winrates[shownRole]!.games} jogos</small>
-        </div>
-      )}
     </button>
   );
 }
