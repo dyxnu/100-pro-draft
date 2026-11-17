@@ -11,6 +11,8 @@
 // - O leilão acaba quando todos completam o time (ou os lotes acabam). Vagas que sobrarem são
 //   preenchidas de graça com campeões não vendidos; fora da rota, o campeão rende metade.
 
+import { SKINS } from '@/lib/store/catalog';
+
 export const ROLES = ['TOP', 'JUNGLE', 'MID', 'ADC', 'SUPORTE'] as const;
 export type Role = (typeof ROLES)[number];
 
@@ -82,15 +84,16 @@ export interface RoutePick {
   price: number;
   options: Role[];
   deadline: number;
+  skin?: number;
 }
 
-export interface Sale { champId: string; playerId: string; price: number; role: Role; how: AcquiredHow; offRole: boolean; at: number }
+export interface Sale { champId: string; playerId: string; price: number; role: Role; how: AcquiredHow; offRole: boolean; at: number; skin?: number }
 
 export type AuctionEvent =
-  | { type: 'lot_start'; champId: string; index: number; at: number }
+  | { type: 'lot_start'; champId: string; index: number; at: number; skin?: number }
   | { type: 'bid'; champId: string; playerId: string; amount: number; at: number }
   | { type: 'pass'; champId: string; playerId: string; at: number }
-  | { type: 'sold'; champId: string; playerId: string; amount: number; at: number }
+  | { type: 'sold'; champId: string; playerId: string; amount: number; at: number; skin?: number }
   | { type: 'unsold'; champId: string; at: number }
   | { type: 'route_pick'; champId: string; playerId: string; options: Role[]; at: number }
   | { type: 'placed'; champId: string; playerId: string; role: Role; via: 'escolha' | 'auto' | 'unica' | 'sobra'; price: number; offRole: boolean; at: number }
@@ -307,14 +310,28 @@ export function nextDeadline(s: AuctionState): number | null {
   return s.current ? s.current.endsAt : s.intermissionUntil;
 }
 
+/** Chance de um lote vir com skin (só visual, não muda atributos). */
+export const SKIN_CHANCE = 0.05;
+
+/** Sorteia a skin do lote com o RNG do estado (determinístico): sempre 1 número, +1 se sair skin. */
+function rollSkin(s: AuctionState, champId: string): number | undefined {
+  const hit = nextRandom(s) < SKIN_CHANCE;
+  if (!hit) return undefined;
+  const list = (SKINS[champId] ?? []).filter(x => x.num > 0);
+  if (!list.length) return undefined;
+  return list[Math.floor(nextRandom(s) * list.length)].num;
+}
+
 function startNextLot(s: AuctionState, now: number) {
   if (allFull(s) || !s.queue.length) return finish(s, now);
   const champId = s.queue.shift()!;
+  const skin = rollSkin(s, champId);
+  const withSkin = skin != null ? { skin } : {};
   s.current = {
     champId, index: s.totalLots - s.queue.length, highBid: null, bidCount: 0, passes: [],
-    startedAt: now, endsAt: now + s.config.bidTimeMs,
+    startedAt: now, endsAt: now + s.config.bidTimeMs, ...withSkin,
   };
-  emit(s, { type: 'lot_start', champId, index: s.current.index, at: now });
+  emit(s, { type: 'lot_start', champId, index: s.current.index, at: now, ...withSkin });
   closeIfEveryonePassed(s, now); // ninguém pode receber este campeão: fecha direto
 }
 
@@ -323,8 +340,8 @@ function resolveLot(s: AuctionState, now: number) {
   if (cur.highBid) {
     const p = getPlayer(s, cur.highBid.playerId)!;
     p.budget -= cur.highBid.amount;
-    emit(s, { type: 'sold', champId: cur.champId, playerId: p.id, amount: cur.highBid.amount, at: now });
-    beginPlacement(s, p.id, cur.champId, cur.highBid.amount, now);
+    emit(s, { type: 'sold', champId: cur.champId, playerId: p.id, amount: cur.highBid.amount, at: now, ...(cur.skin != null ? { skin: cur.skin } : {}) });
+    beginPlacement(s, p.id, cur.champId, cur.highBid.amount, now, cur.skin);
     return;
   }
   s.leftovers.push(cur.champId);
@@ -333,10 +350,10 @@ function resolveLot(s: AuctionState, now: number) {
   emit(s, { type: 'unsold', champId: cur.champId, at: now });
 }
 
-function beginPlacement(s: AuctionState, playerId: string, champId: string, price: number, now: number) {
+function beginPlacement(s: AuctionState, playerId: string, champId: string, price: number, now: number, skin?: number) {
   const options = validRoles(s, playerId, champId);
   s.current = null;
-  s.routePick = { playerId, champId, price, options, deadline: now + s.config.routePickMs };
+  s.routePick = { playerId, champId, price, options, deadline: now + s.config.routePickMs, ...(skin != null ? { skin } : {}) };
   if (options.length === 1) {
     placeChampion(s, options[0], now, 'unica');
     return;
@@ -354,8 +371,9 @@ function autoPickRoute(s: AuctionState, now: number) {
 function placeChampion(s: AuctionState, role: Role, now: number, via: 'escolha' | 'auto' | 'unica') {
   const rp = s.routePick!;
   const p = getPlayer(s, rp.playerId)!;
-  p.roster[role] = { champId: rp.champId, price: rp.price, how: 'leilao', offRole: false };
-  s.sales.push({ champId: rp.champId, playerId: p.id, price: rp.price, role, how: 'leilao', offRole: false, at: now });
+  const skin = rp.skin != null ? { skin: rp.skin } : {};
+  p.roster[role] = { champId: rp.champId, price: rp.price, how: 'leilao', offRole: false, ...skin };
+  s.sales.push({ champId: rp.champId, playerId: p.id, price: rp.price, role, how: 'leilao', offRole: false, at: now, ...skin });
   s.routePick = null;
   s.phase = 'bidding';
   s.intermissionUntil = now + s.config.intermissionMs;

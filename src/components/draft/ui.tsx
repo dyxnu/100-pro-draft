@@ -15,11 +15,11 @@ const initials = (n: string) =>
 export const seatColor = (playerId: string) => SEAT_COLORS[Number(playerId.replace('seat', '')) % SEAT_COLORS.length];
 
 /** Imagem do campeão (Data Dragon) com iniciais caso a imagem não carregue. */
-export function ChampImg({ id, name, big = false, className = '' }: { id: string; name: string; big?: boolean; className?: string }) {
+export function ChampImg({ id, name, big = false, className = '', skin = 0 }: { id: string; name: string; big?: boolean; className?: string; skin?: number }) {
   const [failed, setFailed] = useState(false);
   if (failed) return <div className={`${className} img-fallback`}>{initials(name)}</div>;
   const src = big
-    ? `https://ddragon.leagueoflegends.com/cdn/img/champion/loading/${id}_0.jpg`
+    ? `https://ddragon.leagueoflegends.com/cdn/img/champion/loading/${id}_${skin}.jpg`
     : `https://ddragon.leagueoflegends.com/cdn/${DDRAGON}/img/champion/${id}.png`;
   return <img key={src} src={src} alt={name} className={className} loading="lazy" onError={() => setFailed(true)} />;
 }

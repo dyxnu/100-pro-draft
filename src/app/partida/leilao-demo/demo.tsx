@@ -4,6 +4,7 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { type AuctionState, type Champion, chooseRoute, createGame, passLot, placeBid } from '@/lib/auction/engine';
 import { type BotBrains, createBrains } from '@/lib/auction/bots';
 import { advance } from '@/lib/auction/runner';
+import { SKINS } from '@/lib/store/catalog';
 import type { ClientAction } from '@/lib/rooms/types';
 import { AuctionStage } from '@/components/draft/AuctionView';
 
@@ -26,14 +27,21 @@ export function AuctionDemo({ champions }: { champions: Champion[] }) {
   }, [champions]);
 
   // Relógio local (no jogo de verdade quem faz isso é o servidor).
+  // ?skins=1 na URL: todo lote vem com skin (só nesta demonstração, para ver o efeito).
   useEffect(() => {
+    const forceSkins = new URLSearchParams(window.location.search).has('skins');
     const id = setInterval(() => {
       const g = game.current;
       if (!g) return;
       const v = g.s.version;
       advance(g.s, g.brains, Date.now());
+      const cur = g.s.current;
+      if (forceSkins && cur && cur.skin == null && cur.bidCount === 0) {
+        const list = SKINS[cur.champId];
+        if (list?.length) { cur.skin = list[cur.index % list.length].num; g.s.version++; }
+      }
       if (g.s.version !== v) setS(structuredClone(g.s));
-    }, 150);
+    }, 100);
     return () => clearInterval(id);
   }, []);
 
