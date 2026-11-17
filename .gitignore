@@ -49,3 +49,6 @@ next-env.d.ts
 
 .vercel
 .env*
+
+# cópias de trabalho dos agentes
+.claude/worktrees/
