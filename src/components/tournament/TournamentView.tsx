@@ -4,10 +4,10 @@ import { useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
 import { ROLES, type AuctionState, type Role } from '@/lib/auction/engine';
 import type { ClientAction } from '@/lib/rooms/types';
-import { STRATEGY_OPTIONS, type Strategy, teamProfile } from '@/lib/match/model';
+import { STRATEGY_OPTIONS, type Strategy } from '@/lib/match/model';
 import {
   type TMatch, type TeamEntry, type TournamentState,
-  matchResult, matchTeam, playingMatchOf, roundMatches, teamCards, teamRating,
+  matchResult, playingMatchOf, roundMatches, teamCards, teamRating,
 } from '@/lib/tournament/engine';
 import { ChampionCard } from '@/components/cards/ChampionCard';
 import { MatchViewer, type VictoryFx, type ViewerSide, isVictoryFx } from '@/components/match/MatchViewer';
@@ -181,7 +181,6 @@ function LineupStage({ s, t, me, match, act, pending }: {
   const opp = t.teams[oppId];
   const [sel, setSel] = useState<Role | null>(null);
   const cards = useMemo(() => teamCards(team, s.champions), [team, s.champions]);
-  const issues = useMemo(() => teamProfile(matchTeam(team, s.champions).cards).compIssues, [team, s.champions]);
   const playing = roundMatches(t).flatMap(m => (m.a && m.b ? [m.a, m.b] : []));
   const readyCount = playing.filter(id => t.teams[id].ready).length;
 
@@ -225,9 +224,6 @@ function LineupStage({ s, t, me, match, act, pending }: {
               <span>{s.champions[opp.lineup[r]].name}</span>            </div>
           ))}
         </div>
-        {issues.length > 0 && (
-          <p className="comp-warn">⚠ Composição: {issues.join(', ')}. Times assim rendem menos em batalha.</p>
-        )}
         <button className={team.ready ? 'btn-secondary w-full' : 'btn-primary w-full'} disabled={pending} onClick={() => act({ type: 'ready', ready: !team.ready })}>
           {team.ready ? 'Pronto! (clique para desfazer)' : 'Pronto para o jogo'}
         </button>

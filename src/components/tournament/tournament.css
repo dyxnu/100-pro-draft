@@ -84,7 +84,6 @@
 .lineup, .watch, .champion { animation: fadeUp .35s ease-out both; }
 .champion h2 { animation: bump .6s ease-out; }
 .tour-head h1 { color: var(--color-gold2); font-weight: 900; }
-.comp-warn { margin: -4px 0 12px; padding: 8px 10px; border-radius: 10px; font-size: 12px; background: rgba(210, 63, 92, .08); color: var(--color-danger); border: 1px solid rgba(210, 63, 92, .3); }
 
 /* escolher partida para assistir */
 .watch-pick { display: flex; flex-direction: column; gap: 8px; margin-bottom: 12px; }
