@@ -123,7 +123,8 @@ export function AuctionView({ code, roomId, initialState, initialTournament, ini
     return () => clearInterval(id);
   }, [done, me, send]);
 
-  const act = async (action: ClientAction) => {
+  // Estável entre renderizações: os atalhos de teclado e os blocos memoizados não são recriados a cada lance.
+  const act = useCallback(async (action: ClientAction) => {
     // Lance e passe aparecem na hora (aplicados localmente com o mesmo motor do servidor);
     // a resposta do servidor confirma ou corrige logo em seguida.
     if (me && (action.type === 'bid' || action.type === 'pass')) {
@@ -143,7 +144,7 @@ export function AuctionView({ code, roomId, initialState, initialTournament, ini
       setToast(r.reason);
       setTimeout(() => setToast(null), 2500);
     }
-  };
+  }, [me, send, serverTime]);
 
   if (s.phase === 'finished') {
     return (
@@ -205,7 +206,7 @@ function Results({ s, me }: { s: AuctionState; me: string | null }) {
               return (
                 <div key={r} className="trow">
                   <span className="role">{ROLE_LABEL[r]}</span>
-                  <ChampImg id={c.id} name={c.name} className="ic" />
+                  <ChampImg id={c.id} name={c.name} className={`ic ${x.skin ? 'pd-skinglow' : ''}`} />
                   <span>{c.name}<span className="how">{HOW_LABEL[x.how]}{x.offRole ? ' · fora da rota' : ''}</span></span>
                   <span className="pr">{fmt(x.price)}</span>
                 </div>
