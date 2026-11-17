@@ -58,7 +58,7 @@ describe('posse de cosméticos', () => {
     expect(ownedTitles(ctx())).toEqual([]);
     expect(ownedTitles(ctx({ is_beta: true }))).toEqual(['title:alpha']);
     const t = ownedTitles(ctx({ titles_won: 5, honor_level: 5, peak_tier: 'DESAFIANTE', inventory: new Set(['title:lunari', 'title:vip']) }));
-    expect(t).toEqual(['title:campeao', 'title:pentacampeao', 'title:honrado', 'title:lunari', 'title:desafiante']);
+    expect(t).toEqual(['title:vip', 'title:primeira_taca', 'title:mestre', 'title:grao_mestre', 'title:desafiante', 'title:honrado', 'title:lunari']);
     expect(canEquip('title', 'title:lunari', ctx())).toBe(false);
     expect(canEquip('title', 'title:inventado', ctx({ inventory: new Set(['title:inventado']) }))).toBe(false);
   });

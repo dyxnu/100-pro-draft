@@ -57,6 +57,8 @@ export interface Profile {
   name_change_tokens: number;
   referral_code: string | null;
   referred_by: string | null;
+  /** Migração 0007: até quando as notificações já foram vistas. */
+  notif_seen_at?: string | null;
 }
 
 export const isVip = (p: Pick<Profile, 'vip_until'> | null | undefined) => !!p?.vip_until && new Date(p.vip_until).getTime() > Date.now();

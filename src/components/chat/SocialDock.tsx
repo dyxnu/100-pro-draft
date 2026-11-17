@@ -1,19 +1,12 @@
 import { getCurrentUser } from '@/lib/supabase/server';
-import { GlobalChatDock, GuestBanner } from './Docks';
+import { GuestBanner } from './Docks';
 
 /**
- * Componente de servidor para o layout: aviso de convidado + botão do chat global.
- * Quem não entrou não vê nada (o chat só é lido por usuários autenticados).
+ * Componente de servidor para o layout: aviso de convidado. (Não há chat global: só o chat da sala.)
  */
 export async function SocialDock() {
   const session = await getCurrentUser().catch(() => null);
   const profile = session?.profile;
   if (!profile) return null;
-  const guest = !!profile.is_guest;
-  return (
-    <>
-      {guest && <GuestBanner />}
-      <GlobalChatDock meId={profile.id} canSend={!guest} />
-    </>
-  );
+  return profile.is_guest ? <GuestBanner /> : null;
 }

@@ -21,16 +21,9 @@ function ErrorText({ error }: { error?: string }) {
 export function CreateRoomForm() {
   const [state, action, pending] = useActionState(createRoomAction, {});
   return (
-    <form action={action} className="space-y-4">
-      <label className="block">
-        <span className="label">Velocidade</span>
-        <select name="speed" className="input" defaultValue="normal">
-          <option value="normal">Normal: 10 s por lance</option>
-          <option value="rapido">Rápida: 5 s por lance</option>
-        </select>
-      </label>
+    <form action={action} className="space-y-2">
       <ErrorText error={state.error} />
-      <button className="btn-primary w-full" disabled={pending}>{pending ? 'Criando…' : 'Criar sala'}</button>
+      <button className="ar-btn" disabled={pending}>{pending ? 'Criando a sala…' : 'Criar sala'}</button>
     </form>
   );
 }
@@ -38,16 +31,15 @@ export function CreateRoomForm() {
 export function JoinRoomForm() {
   const [state, action, pending] = useActionState(goToRoomAction, {});
   return (
-    <form action={action} className="space-y-4">
-      <label className="block">
-        <span className="label">Código da sala</span>
+    <form action={action} className="space-y-2">
+      <div className="ar-code">
         <input
-          name="code" required maxLength={6} autoComplete="off" placeholder="A1B2C3"
-          className="input font-mono text-lg uppercase tracking-[0.3em]"
+          name="code" required maxLength={6} autoComplete="off" placeholder="A1B2C3" aria-label="Código da sala"
+          className="font-mono uppercase"
         />
-      </label>
+        <button className="ar-btn" disabled={pending}>Entrar</button>
+      </div>
       <ErrorText error={state.error} />
-      <button className="btn-secondary w-full" disabled={pending}>Entrar</button>
     </form>
   );
 }

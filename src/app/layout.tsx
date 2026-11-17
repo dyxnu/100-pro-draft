@@ -3,6 +3,7 @@ import { Nunito } from 'next/font/google';
 import { SiteHeader } from '@/components/SiteHeader';
 import { SetupNotice } from '@/components/SetupNotice';
 import { SocialDock } from '@/components/chat/SocialDock';
+import Link from 'next/link';
 import './globals.css';
 
 // O cabeçalho depende da sessão do usuário: sempre renderizar no servidor a cada pedido.
@@ -24,6 +25,8 @@ export default function RootLayout({ children }: Readonly<{ children: React.Reac
         <SocialDock />
         <main className="mx-auto w-full max-w-6xl px-4 pb-16 sm:px-6">{children}</main>
         <footer className="mx-auto max-w-6xl px-4 pb-8 text-center text-xs text-muted sm:px-6">
+          <Link href="/feedback" className="mb-2 inline-block font-bold text-accent hover:underline">Mandar feedback</Link>
+          <br />
           100 pro Draft é um projeto de fãs, sem afiliação com a Riot Games. League of Legends, campeões e o mapa são marcas da Riot Games, Inc.
         </footer>
       </body>

@@ -42,11 +42,11 @@ describe('catálogo', () => {
 
 describe('VIP e beta', () => {
   it('itens do VIP só valem com VIP ativo', () => {
-    const rows = [{ item_id: 'title:vip', source: 'vip' }, { item_id: 'border:ouro', source: 'loja' }];
-    expect(effectiveOwned(rows, true).has('title:vip')).toBe(true);
-    expect(effectiveOwned(rows, false).has('title:vip')).toBe(false);
+    const rows = [{ item_id: 'border:vip', source: 'vip' }, { item_id: 'border:ouro', source: 'loja' }];
+    expect(effectiveOwned(rows, true).has('border:vip')).toBe(true);
+    expect(effectiveOwned(rows, false).has('border:vip')).toBe(false);
     expect(effectiveOwned(rows, false).has('border:ouro')).toBe(true);
-    expect(missingVipGrants(rows, true)).toEqual(['border:vip']);
+    expect(missingVipGrants([], true)).toEqual(['border:vip']);
     expect(missingVipGrants(rows, false)).toEqual([]);
   });
   it('resgate do beta só uma vez e nunca para convidado', () => {

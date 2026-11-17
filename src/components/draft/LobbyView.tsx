@@ -91,23 +91,48 @@ export function LobbyView({ room, members, meId, isMember, avatars, myAvatar, ra
       <section className="lb-hero anim-fade-up">
         <div className="lb-moon" aria-hidden />
         <div className="min-w-0">
-          <p className="lb-eyebrow">Saguão · {ranked ? 'ranqueada' : 'casual'} · mata-mata</p>
+          <p className="lb-eyebrow">Saguão · mata-mata</p>
           <h1>Sala <button className="lb-code" onClick={() => copy('code')} title="Copiar código">{room.code}</button></h1>
           <div className="lb-chips">
-            <span className={`lb-mode ${ranked ? 'ranked' : ''}`}>{ranked ? '🏆 Ranqueada · vale elo (PDL)' : '🎲 Casual · não mexe no elo'}</span>
-            <span>👥 {members.length}/{room.max_players} participantes</span>
-            <span>⏱ {room.speed === 'rapido' ? '6 s' : '10 s'} por campeão</span>
-            <span>{room.show_overall ? '👁 overall à mostra' : '🙈 overall escondido'}</span>
-            <span>🤖 {bots} bot{bots === 1 ? '' : 's'}</span>
+            <span>{members.length}/{room.max_players} participantes</span>
+            <span>{room.speed === 'rapido' ? '6 s' : '10 s'} por lance</span>
+            <span>{room.show_overall ? 'Overall à mostra' : 'Overall escondido'}</span>
+            {bots > 0 && <span>{bots} bot{bots === 1 ? '' : 's'}</span>}
           </div>
           {ranked && guestsIn.length > 0 && (
             <p className="lb-note">Convidados nesta sala ({guestsIn.map(g => g.display_name).join(', ')}) jogam, mas a ranqueada não conta para eles.</p>
           )}
         </div>
         <div className="lb-invite">
-          <button className="btn-primary" onClick={() => copy('link')}>{copied === 'link' ? '✓ Link copiado!' : '🔗 Copiar convite'}</button>
+          <button className="btn-primary" onClick={() => copy('link')}>{copied === 'link' ? '✓ Link copiado!' : 'Copiar convite'}</button>
           <span className="truncate">{copied === 'code' ? 'Código copiado!' : inviteUrl}</span>
         </div>
+      </section>
+
+      <section className="lb-modes" aria-label="Modo da partida">
+        {([
+          ['casual', 'Casual', 'Vale essência azul e experiência. Não mexe no elo. Bots liberados.'],
+          ['ranked', 'Ranqueada', 'Vale PDL e sobe seu elo. Só pessoas, sem bots.'],
+        ] as [RoomMode, string, string][]).map(([v, label, desc]) => {
+          const blocked = v === 'ranked' && (meGuest || bots > 0);
+          return (
+            <button
+              key={v} type="button" className={`lb-modecard ${v} ${room.mode === v ? 'on' : ''}`}
+              disabled={!isHost || pending || blocked || room.mode === v}
+              title={!isHost ? 'Só o dono da sala escolhe o modo' : v === 'ranked' && meGuest ? 'Convidados não jogam ranqueada' : v === 'ranked' && bots > 0 ? 'Remova os bots para jogar ranqueada' : undefined}
+              onClick={() => run(() => updateSettingsAction(room.code, { mode: v }))}
+            >
+              <span className="lb-modeart" aria-hidden>
+                {v === 'ranked' ? <img src="/ranked/challenger.webp" alt="" draggable={false} /> : <img src="/positions/middle.svg" alt="" draggable={false} />}
+              </span>
+              <span className="min-w-0">
+                <b>{label}{room.mode === v && <i>Selecionado</i>}</b>
+                <small>{desc}</small>
+                {v === 'ranked' && bots > 0 && isHost && <small className="lb-modewarn">Remova os bots para escolher.</small>}
+              </span>
+            </button>
+          );
+        })}
       </section>
 
       <div className="lb-main">
@@ -117,7 +142,7 @@ export function LobbyView({ room, members, meId, isMember, avatars, myAvatar, ra
             <h2>Jogadores</h2>
             {isHost && free > 0 && !ranked && (
               <button className="lb-fill" disabled={pending} onClick={() => run(() => fillBotsAction(room.code))}>
-                🤖 Preencher {free === 1 ? 'a vaga' : `as ${free} vagas`} com bots
+                Preencher {free === 1 ? 'a vaga' : `as ${free} vagas`} com bots
               </button>
             )}
             <div className="lb-progress" title="Jogadores prontos">
@@ -137,7 +162,7 @@ export function LobbyView({ room, members, meId, isMember, avatars, myAvatar, ra
                       <p className="font-bold">Vaga {seat + 1}</p>
                       <p className="text-xs text-muted">convide um amigo{isHost && !ranked ? ' ou' : ''}</p>
                       {isHost && !ranked && (
-                        <button className="lb-addbot" disabled={pending} onClick={() => run(() => addBotAction(room.code))}>🤖 Adicionar bot</button>
+                        <button className="lb-addbot" disabled={pending} onClick={() => run(() => addBotAction(room.code))}>+ Adicionar bot</button>
                       )}
                     </div>
                   </div>
@@ -239,22 +264,6 @@ export function LobbyView({ room, members, meId, isMember, avatars, myAvatar, ra
           <section className="lb-panel">
             <h2>Configurações {!isHost && <small>(o dono escolhe)</small>}</h2>
             <div className="lb-settings">
-              <div className="lb-row">
-                <span>Modo</span>
-                <div className="lb-seg">
-                  {([['casual', 'Casual'], ['ranked', 'Ranqueada']] as [RoomMode, string][]).map(([v, l]) => (
-                    <button key={v} className={room.mode === v ? 'on' : ''}
-                      disabled={!isHost || pending || (v === 'ranked' && (meGuest || bots > 0))}
-                      title={v === 'ranked' && meGuest ? 'Convidados não jogam ranqueada' : v === 'ranked' && bots > 0 ? 'Remova os bots para jogar ranqueada' : undefined}
-                      onClick={() => run(() => updateSettingsAction(room.code, { mode: v }))}>{l}</button>
-                  ))}
-                </div>
-              </div>
-              <p className="lb-hint">
-                {ranked
-                  ? 'Ranqueada: só pessoas (sem bots) e vale PDL para quem tem conta. Veja o elo de cada um antes de ficar pronto.'
-                  : 'Casual: vale essência e experiência, mas não mexe no elo. Bots liberados.'}
-              </p>
               <Toggle label="Overall à mostra no leilão" on={room.show_overall} disabled={!isHost || pending}
                 onChange={v => run(() => updateSettingsAction(room.code, { showOverall: v }))} />
               <div className="lb-row">

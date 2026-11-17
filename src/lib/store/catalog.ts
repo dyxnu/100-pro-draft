@@ -2,6 +2,7 @@
 // do perfil (title_id, banner_id, border_id, theme_id, victory_fx, avatar_url).
 // Tudo é comprado só com Essência Azul (ganha jogando). Nada aqui muda atributos de partida.
 import skinsData from '@/lib/champions/skins.json';
+import iconIds from './icon-ids.json';
 import { NAME_CHANGE_PRICE } from '@/lib/progress/rewards';
 
 export type ItemKind = 'skin' | 'icon' | 'banner' | 'border' | 'theme' | 'victory' | 'title' | 'service';
@@ -11,7 +12,7 @@ export interface StoreItem {
   kind: ItemKind;
   name: string;
   price: number;         // essência azul; 0 = não está à venda (conquista/VIP/beta)
-  rarity: 'comum' | 'rara' | 'epica' | 'lendaria' | 'mitica';
+  rarity: 'comum' | 'rara' | 'epica' | 'lendaria' | 'mitica' | 'suprema';
   champId?: string;      // skins e banners
   skinNum?: number;
   vipOnly?: boolean;
@@ -25,29 +26,35 @@ export const skinCenteredUrl = (champId: string, num = 0) => `https://ddragon.le
 export const profileIconUrl = (iconId: number) => `https://ddragon.leagueoflegends.com/cdn/${DD_VERSION}/img/profileicon/${iconId}.png`;
 
 /** Skins de cada campeão (num > 0) — Data Dragon, sincronizado por scripts/sync-skins.mjs. */
-export const SKINS = skinsData as Record<string, { num: number; name: string }[]>;
+export const SKINS = skinsData as Record<string, { num: number; name: string; r?: string; l?: 1 }[]>;
 
-function skinPrice(name: string): { price: number; rarity: StoreItem['rarity'] } {
-  if (/Prest[ií]gio|Prestige/i.test(name)) return { price: 9_000, rarity: 'mitica' };
-  if (/Eterno|Elderwood|Ascens|Imortal|Ultimate|Supremo|Divino|Aspecto/i.test(name)) return { price: 6_300, rarity: 'lendaria' };
-  if (/Cosmos|Guardi|Fliperama|Arcade|Projeto|PROJECT|Rainha|Celestia|Draconian|Dragões|Coven|Sab[aá]/i.test(name)) return { price: 4_800, rarity: 'epica' };
-  return { price: 3_150, rarity: 'rara' };
+/**
+ * Preço como no LoL (mesmos números do RP, pagos em Essência Azul), pela raridade oficial da skin.
+ * Skins sem raridade variam no LoL (520 a 1350): as de legado e as primeiras saem mais baratas.
+ */
+export function skinPrice(s: { num: number; r?: string; l?: 1 }): { price: number; rarity: StoreItem['rarity'] } {
+  switch (s.r) {
+    case 'kRare': return { price: 975, rarity: 'rara' };
+    case 'kEpic': return { price: 1_350, rarity: 'epica' };
+    case 'kLegendary': return { price: 1_820, rarity: 'lendaria' };
+    case 'kMythic': return { price: 2_775, rarity: 'mitica' };
+    case 'kUltimate': case 'kTranscendent': case 'kExalted': return { price: 3_250, rarity: 'suprema' };
+    default: return { price: s.l ? 520 : s.num <= 3 ? 750 : 975, rarity: 'comum' };
+  }
 }
 
 const SKIN_ITEMS: StoreItem[] = Object.entries(SKINS).flatMap(([champId, list]) => list.map(s => ({
-  id: `skin:${champId}_${s.num}`, kind: 'skin' as const, name: s.name, champId, skinNum: s.num, ...skinPrice(s.name),
+  id: `skin:${champId}_${s.num}`, kind: 'skin' as const, name: s.name, champId, skinNum: s.num, ...skinPrice(s),
 })));
 
-// Ícones de perfil do LoL (Data Dragon). 0–28: grátis para todos. Os demais, à venda.
-// Conferidos com HEAD em profileIconUrl (versão 16.22.1); o 5790 não existia e saiu.
+// Ícones de perfil do LoL: 0–28 grátis para todos; os demais (todos os que o Data Dragon serve,
+// sincronizados por scripts/sync-skins.mjs) à venda. Os nomes ficam em icons.json, carregado só na loja.
 export const FREE_ICONS = Array.from({ length: 29 }, (_, i) => i);
-const SHOP_ICON_IDS = [
-  588, 590, 744, 785, 1105, 1211, 1301, 1385, 1442, 1588, 1628, 3150, 3379, 3502, 3797, 4022, 4219, 4568, 4644, 4834,
-  4900, 5021, 5142, 5340, 5384, 5455, 5562, 5698, 5888, 6017, 6270, 6345, 6521, 6631, 6743,
-];
-const ICON_ITEMS: StoreItem[] = SHOP_ICON_IDS.map((id, i) => ({
-  id: `icon:${id}`, kind: 'icon' as const, name: `Ícone #${id}`, price: i % 3 === 0 ? 1_200 : 750, rarity: i % 3 === 0 ? 'rara' : 'comum',
-}));
+export const SHOP_ICON_IDS = iconIds as number[];
+/** Ícones mais novos custam um pouco mais (como os ícones de evento no LoL). */
+export const iconPrice = (id: number): { price: number; rarity: StoreItem['rarity'] } =>
+  id >= 6000 ? { price: 750, rarity: 'rara' } : { price: 450, rarity: 'comum' };
+const ICON_ITEMS: StoreItem[] = SHOP_ICON_IDS.map(id => ({ id: `icon:${id}`, kind: 'icon' as const, name: `Ícone #${id}`, ...iconPrice(id) }));
 
 // Bordas, temas, efeitos de vitória e títulos são ORIGINAIS (não são da Riot).
 const BORDERS: StoreItem[] = [
@@ -56,6 +63,12 @@ const BORDERS: StoreItem[] = [
   { id: 'border:eclipse', kind: 'border', name: 'Eclipse', price: 4_200, rarity: 'epica' },
   { id: 'border:aurora', kind: 'border', name: 'Aurora', price: 4_200, rarity: 'epica' },
   { id: 'border:supernova', kind: 'border', name: 'Supernova', price: 7_500, rarity: 'lendaria' },
+  { id: 'border:hextec', kind: 'border', name: 'Engrenagem Hextec', price: 3_600, rarity: 'rara' },
+  { id: 'border:gelo', kind: 'border', name: 'Gelo Eterno', price: 3_600, rarity: 'rara' },
+  { id: 'border:sombras', kind: 'border', name: 'Névoa Negra', price: 4_200, rarity: 'epica' },
+  { id: 'border:dragao', kind: 'border', name: 'Chama do Dragão', price: 5_200, rarity: 'epica' },
+  { id: 'border:pulsar', kind: 'border', name: 'Pulsar', price: 6_000, rarity: 'lendaria' },
+  { id: 'border:eclipse_total', kind: 'border', name: 'Eclipse Total', price: 9_500, rarity: 'mitica' },
   { id: 'border:vip', kind: 'border', name: 'Borda VIP', price: 0, rarity: 'lendaria', vipOnly: true },
 ];
 const THEMES: StoreItem[] = [
@@ -64,22 +77,43 @@ const THEMES: StoreItem[] = [
   { id: 'theme:aurora', kind: 'theme', name: 'Aurora Boreal', price: 3_000, rarity: 'rara' },
   { id: 'theme:hextec', kind: 'theme', name: 'Hextec', price: 4_500, rarity: 'epica' },
   { id: 'theme:sombras', kind: 'theme', name: 'Ilhas das Sombras', price: 4_500, rarity: 'epica' },
+  { id: 'theme:abismo', kind: 'theme', name: 'Abismo Marinho', price: 3_000, rarity: 'rara' },
+  { id: 'theme:solari', kind: 'theme', name: 'Templo Solari', price: 3_000, rarity: 'rara' },
+  { id: 'theme:freljord', kind: 'theme', name: 'Freljord', price: 3_000, rarity: 'rara' },
+  { id: 'theme:vazio', kind: 'theme', name: 'Vazio', price: 4_500, rarity: 'epica' },
+  { id: 'theme:sakura', kind: 'theme', name: 'Flor Espiritual', price: 4_500, rarity: 'epica' },
+  { id: 'theme:imperial', kind: 'theme', name: 'Ouro Imperial', price: 6_000, rarity: 'lendaria' },
 ];
 const VICTORY: StoreItem[] = [
-  { id: 'victory:confete', kind: 'victory', name: 'Chuva de Confete', price: 1_500, rarity: 'comum' },
+  { id: 'victory:confete', kind: 'victory', name: 'Canhões de Confete', price: 1_500, rarity: 'comum' },
   { id: 'victory:estrelas', kind: 'victory', name: 'Estrelas Cadentes', price: 3_200, rarity: 'rara' },
   { id: 'victory:moonfall', kind: 'victory', name: 'Queda Lunar', price: 5_500, rarity: 'epica' },
   { id: 'victory:fogos', kind: 'victory', name: 'Fogos Hextec', price: 5_500, rarity: 'epica' },
+  { id: 'victory:aurora', kind: 'victory', name: 'Aurora Boreal', price: 4_800, rarity: 'epica' },
+  { id: 'victory:brasas', kind: 'victory', name: 'Brasas do Dragão', price: 6_500, rarity: 'lendaria' },
 ];
 export const TITLES: StoreItem[] = [
   { id: 'title:alpha', kind: 'title', name: 'Alpha Tester', price: 0, rarity: 'mitica', description: 'Jogou durante o beta' },
-  { id: 'title:vip', kind: 'title', name: 'Apoiador VIP', price: 0, rarity: 'lendaria', vipOnly: true },
-  { id: 'title:campeao', kind: 'title', name: 'Campeão', price: 0, rarity: 'rara', description: 'Venceu um campeonato' },
-  { id: 'title:pentacampeao', kind: 'title', name: 'Pentacampeão', price: 0, rarity: 'epica', description: 'Venceu 5 campeonatos' },
-  { id: 'title:honrado', kind: 'title', name: 'Honrado', price: 0, rarity: 'rara', description: 'Chegou à honra 5' },
-  { id: 'title:leiloeiro', kind: 'title', name: 'Leiloeiro', price: 2_000, rarity: 'comum' },
-  { id: 'title:lunari', kind: 'title', name: 'Lunari', price: 3_500, rarity: 'rara' },
+  { id: 'title:vip', kind: 'title', name: 'Apoiador', price: 0, rarity: 'lendaria', description: 'Apoiou o projeto' },
+  // Campeonatos
+  { id: 'title:primeira_taca', kind: 'title', name: 'Primeira Taça', price: 0, rarity: 'comum', description: 'Venceu o primeiro campeonato' },
+  { id: 'title:dinastia', kind: 'title', name: 'Dinastia', price: 0, rarity: 'epica', description: 'Venceu 25 campeonatos' },
+  { id: 'title:imperador', kind: 'title', name: 'Imperador do Rift', price: 0, rarity: 'mitica', description: 'Venceu 100 campeonatos' },
+  { id: 'title:veterano', kind: 'title', name: 'Veterano', price: 0, rarity: 'rara', description: 'Disputou 100 campeonatos' },
+  // Elo (o maior que já alcançou)
+  { id: 'title:mestre', kind: 'title', name: 'Mestre', price: 0, rarity: 'epica', description: 'Chegou ao Mestre' },
+  { id: 'title:grao_mestre', kind: 'title', name: 'Grão-Mestre', price: 0, rarity: 'lendaria', description: 'Chegou ao Grão-Mestre' },
   { id: 'title:desafiante', kind: 'title', name: 'Desafiante', price: 0, rarity: 'mitica', description: 'Chegou ao Desafiante' },
+  // Comunidade
+  { id: 'title:honrado', kind: 'title', name: 'Honrado', price: 0, rarity: 'rara', description: 'Chegou à honra 5' },
+  { id: 'title:querido', kind: 'title', name: 'Querido da Comunidade', price: 0, rarity: 'epica', description: 'Recebeu 100 elogios' },
+  { id: 'title:recrutador', kind: 'title', name: 'Recrutador', price: 0, rarity: 'rara', description: 'Trouxe 5 amigos que jogaram' },
+  // Loja
+  { id: 'title:leiloeiro', kind: 'title', name: 'Leiloeiro', price: 2_000, rarity: 'comum' },
+  { id: 'title:mao_de_vaca', kind: 'title', name: 'Mão de Vaca', price: 2_000, rarity: 'comum' },
+  { id: 'title:lunari', kind: 'title', name: 'Lunari', price: 3_500, rarity: 'rara' },
+  { id: 'title:all_in', kind: 'title', name: 'All-in', price: 3_500, rarity: 'rara' },
+  { id: 'title:noite_eterna', kind: 'title', name: 'Noite Eterna', price: 6_000, rarity: 'epica' },
 ];
 const SERVICES: StoreItem[] = [
   { id: 'service:rename', kind: 'service', name: 'Troca de nome', price: NAME_CHANGE_PRICE, rarity: 'comum', description: 'Muda seu nome de invocador' },
@@ -92,10 +126,18 @@ export const CATALOG: StoreItem[] = [...SKIN_ITEMS, ...ICON_ITEMS, ...BORDERS, .
 const BY_ID = new Map(CATALOG.map(i => [i.id, i]));
 export const itemById = (id: string) => BY_ID.get(id) ?? null;
 
+/** Metas do programa de convites: amigos que jogaram → prêmio extra (além dos dias de VIP). */
+export const REFERRAL_MILESTONES: { friends: number; label: string; item?: string }[] = [
+  { friends: 1, label: '+3 dias' },
+  { friends: 3, label: '+9 dias' },
+  { friends: 5, label: 'Título Recrutador', item: 'title:recrutador' },
+  { friends: 10, label: 'Borda Pulsar', item: 'border:pulsar' },
+];
+
 /** O que vem com o bônus de beta. */
 export const BETA_GRANTS = ['title:alpha', 'border:prata', 'victory:confete'];
 /** O que o VIP libera enquanto estiver ativo. */
-export const VIP_GRANTS = ['title:vip', 'border:vip'];
+export const VIP_GRANTS = ['border:vip'];
 
 /** Itens que todo mundo tem sem comprar. */
 export function isFreeItem(id: string): boolean {

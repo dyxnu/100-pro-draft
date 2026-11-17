@@ -6,47 +6,6 @@ import { ChatBox } from './ChatBox';
 import { roomChannel } from './shared';
 import './chat.css';
 
-const KEY = 'ch-global-open';
-
-/** Botão flutuante (canto inferior direito) que abre o chat global. */
-export function GlobalChatDock({ meId, canSend }: { meId: string; canSend: boolean }) {
-  const [open, setOpen] = useState(false);
-  const [mounted, setMounted] = useState(false); // só conecta depois da primeira abertura
-  const [unread, setUnread] = useState(0);
-
-  useEffect(() => {
-    try {
-      if (localStorage.getItem(KEY) === '1') { setOpen(true); setMounted(true); }
-    } catch { /* sem armazenamento */ }
-  }, []);
-  const toggle = () => {
-    const v = !open;
-    setOpen(v);
-    if (v) { setMounted(true); setUnread(0); }
-    try { localStorage.setItem(KEY, v ? '1' : '0'); } catch { /* ignora */ }
-  };
-
-  return (
-    <div className="ch-dock right">
-      {mounted && (
-        <section className="ch-panel" hidden={!open} aria-label="Chat global">
-          <header><b>🌙 Chat global</b><button onClick={toggle} aria-label="Fechar">✕</button></header>
-          <ChatBox
-            channel="global" meId={meId} canSend={canSend}
-            readOnlyHint={<>Convidados só leem o chat global. <Link href="/cadastro">Crie uma conta</Link> para conversar.</>}
-            onNew={() => { if (!open) setUnread(n => n + 1); }}
-          />
-        </section>
-      )}
-      {!open && (
-        <button className="ch-fab" onClick={toggle} aria-label="Abrir chat global">
-          💬 <span>Chat global</span>{unread > 0 && <i>{unread > 9 ? '9+' : unread}</i>}
-        </button>
-      )}
-    </div>
-  );
-}
-
 /** Chat da sala flutuante (canto inferior esquerdo) durante o leilão e o campeonato. */
 export function RoomChatDock({ roomId, meId, canSend }: { roomId: string; meId: string; canSend: boolean }) {
   const [open, setOpen] = useState(false);

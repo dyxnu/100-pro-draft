@@ -6,6 +6,8 @@ import { profileIconUrl } from '@/lib/store/catalog';
 import { canClaimBeta } from '@/lib/store/rules';
 import { EssenceAmount } from './header/EssenceIcon';
 import { Logo } from './Logo';
+import { MobileMenu } from './header/MobileMenu';
+import { NotificationBell } from './header/NotificationBell';
 import './header/header.css';
 
 const LINKS = [
@@ -50,6 +52,7 @@ export async function SiteHeader() {
                   <EssenceAmount value={essence} size={15} />
                 </Link>
               )}
+              {!profile.is_guest && <NotificationBell />}
               <Link href="/perfil" className="flex min-w-0 items-center gap-2 rounded-xl border border-line px-1.5 py-1 hover:border-accent sm:pr-2.5">
                 <span className="relative shrink-0">
                   <img src={iconSrc(profile.avatar_url)} alt="" width={28} height={28} className="h-7 w-7 rounded-full object-cover ring-2 ring-gold/60" />
@@ -63,15 +66,13 @@ export async function SiteHeader() {
             <Link href="/entrar" className="btn-secondary !px-3 !py-1.5">Entrar</Link>
           )}
 
-          <details className="st-menu md:hidden">
-            <summary aria-label="Menu"><span /><span /><span /></summary>
-            <div className="st-menu-pop">
-              {LINKS.map(l => <Link key={l.href} href={l.href}>{l.label}</Link>)}
-              <Link href="/campeoes">Campeões</Link>
-              {profile && <Link href="/perfil">Meu perfil</Link>}
-              {profile && <form action={signOut}><button>Sair</button></form>}
-            </div>
-          </details>
+          <MobileMenu>
+            {LINKS.map(l => <Link key={l.href} href={l.href}>{l.label}</Link>)}
+            <Link href="/campeoes">Campeões</Link>
+            {profile && <Link href="/perfil">Meu perfil</Link>}
+            <Link href="/feedback">Feedback</Link>
+            {profile && <form action={signOut}><button>Sair</button></form>}
+          </MobileMenu>
         </div>
       </div>
     </header>

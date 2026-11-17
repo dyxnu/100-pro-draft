@@ -2,10 +2,9 @@ import Link from 'next/link';
 import type { Metadata } from 'next';
 import { TIERS, TIER_COLOR, TIER_LABEL } from '@/lib/progress/rank';
 import { getRanking } from '@/components/home/ranking';
-import { RankingTable } from '@/components/home/RankingTable';
+import { LiveRanking } from '@/components/home/LiveRanking';
 import { TierEmblem } from '@/components/home/TierEmblem';
 import { NightSky } from '@/components/home/NightSky';
-import { pixelFont } from '@/components/home/fonts';
 import '@/components/home/home.css';
 
 export const metadata: Metadata = {
@@ -18,7 +17,7 @@ export default async function RankingPage() {
   const podium = ranking.rows.slice(0, 3);
 
   return (
-    <div className={`${pixelFont.variable} overflow-x-clip`}>
+    <div className="overflow-x-clip">
       <section className="hm-hero mt-5 px-5 py-10 text-center sm:px-10">
         <NightSky />
         <span className="hm-kicker">Temporada atual</span>
@@ -33,7 +32,7 @@ export default async function RankingPage() {
                 <TierEmblem tier={p.tier} size={i === 1 ? 84 : 64} />
                 <span className="max-w-full truncate text-sm font-black text-white">{p.username}</span>
                 <span className="text-xs font-bold" style={{ color: TIER_COLOR[p.tier] }}>{TIER_LABEL[p.tier]} · {p.lp} PDL</span>
-                <span className={`hm-pixelfont mt-1 grid w-full place-items-center rounded-t-lg text-xs ${i === 1 ? 'h-16 hm-medal-1' : i === 0 ? 'h-11 hm-medal-2' : 'h-8 hm-medal-3'}`}>
+                <span className={`mt-1 grid w-full place-items-center rounded-t-lg text-xs ${i === 1 ? 'h-16 hm-medal-1' : i === 0 ? 'h-11 hm-medal-2' : 'h-8 hm-medal-3'}`}>
                   {i === 1 ? '1º' : i === 0 ? '2º' : '3º'}
                 </span>
               </li>
@@ -43,7 +42,7 @@ export default async function RankingPage() {
       </section>
 
       <section className="mt-8">
-        <RankingTable data={ranking} />
+        <LiveRanking initial={ranking} limit={100} />
         <p className="mt-4 text-center text-sm text-muted">
           <Link href="/" className="text-accent hover:underline">← Voltar ao início</Link>
         </p>

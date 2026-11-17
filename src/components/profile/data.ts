@@ -22,11 +22,26 @@ export interface HistoryRow {
   played_at: string;
 }
 
+/**
+ * Inventário inteiro, de 1000 em 1000 (o banco devolve no máximo 1000 linhas por consulta).
+ * Devolve null se a consulta falhar.
+ */
+export async function fetchInventoryRows(client: Pick<Client, 'from'>, userId: string): Promise<{ item_id: string; source: string }[] | null> {
+  const out: { item_id: string; source: string }[] = [];
+  for (let from = 0; from < 50_000; from += 1000) {
+    const { data, error } = await client.from('inventory').select('item_id, source').eq('user_id', userId)
+      .order('item_id').range(from, from + 999);
+    if (error) return null;
+    out.push(...((data ?? []) as { item_id: string; source: string }[]));
+    if (!data || data.length < 1000) break;
+  }
+  return out;
+}
+
 export async function loadInventory(client: Pick<Client, 'from'>, userId: string): Promise<Set<string>> {
   try {
-    const { data, error } = await client.from('inventory').select('item_id').eq('user_id', userId);
-    if (error) return new Set();
-    return new Set((data ?? []).map(r => String(r.item_id)));
+    const rows = await fetchInventoryRows(client, userId);
+    return new Set((rows ?? []).map(r => String(r.item_id)));
   } catch {
     return new Set();
   }
@@ -36,6 +51,7 @@ export function ownerCtx(p: Profile, inventory: ReadonlySet<string>): OwnerCtx {
   return {
     inventory, vip: isVip(p), is_beta: !!p.is_beta, titles_won: p.titles_won ?? 0,
     honor_level: p.honor_level ?? 0, peak_tier: p.peak_tier ?? null,
+    tournaments: p.tournaments ?? 0, kudos_count: p.kudos_count ?? 0,
   };
 }
 

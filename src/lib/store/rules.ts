@@ -3,12 +3,12 @@
 import { BETA_GRANTS, VIP_GRANTS, isFreeItem, itemById, type StoreItem } from './catalog';
 
 export const RARITY_LABEL: Record<StoreItem['rarity'], string> = {
-  comum: 'Comum', rara: 'Rara', epica: 'Épica', lendaria: 'Lendária', mitica: 'Mítica',
+  comum: 'Comum', rara: 'Rara', epica: 'Épica', lendaria: 'Lendária', mitica: 'Mítica', suprema: 'Suprema',
 };
 export const RARITY_COLOR: Record<StoreItem['rarity'], string> = {
-  comum: '#8b8fae', rara: '#2f8fd8', epica: '#8a5cf0', lendaria: '#e0763a', mitica: '#cf3fb8',
+  comum: '#8b8fae', rara: '#2f8fd8', epica: '#8a5cf0', lendaria: '#e0763a', mitica: '#cf3fb8', suprema: '#e8b923',
 };
-export const RARITY_ORDER: StoreItem['rarity'][] = ['comum', 'rara', 'epica', 'lendaria', 'mitica'];
+export const RARITY_ORDER: StoreItem['rarity'][] = ['comum', 'rara', 'epica', 'lendaria', 'mitica', 'suprema'];
 
 /** Item que pode ser comprado com essência (os de preço 0 são conquista, VIP ou beta). */
 export const isForSale = (item: StoreItem) => item.price > 0 && !item.vipOnly && item.kind !== 'service';

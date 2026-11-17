@@ -6,6 +6,9 @@ import { createAdminClient, isAdminConfigured } from '@/lib/supabase/admin';
 import { isSupabaseConfigured } from '@/lib/supabase/env';
 import { BETA_BONUS_BE } from '@/lib/progress/rewards';
 import { BETA_GRANTS } from './catalog';
+import { notify } from '@/lib/notify/service';
+import { fetchInventoryRows } from '@/components/profile/data';
+import { BETA_BONUS_BE as BETA_BE } from '@/lib/progress/rewards';
 import { type InventoryRow, canClaimBeta, checkPurchase, effectiveOwned, missingBetaGrants, missingVipGrants } from './rules';
 
 export interface StoreSession {
@@ -33,9 +36,9 @@ export async function loadStoreSession(): Promise<StoreSession> {
   let rows: InventoryRow[] = [];
   try {
     const supabase = await createClient();
-    const { data, error } = await supabase.from('inventory').select('item_id, source').eq('user_id', userId);
-    if (error) return { userId, profile, ready: false, vip, owned: new Set() };
-    rows = (data ?? []) as InventoryRow[];
+    const data = await fetchInventoryRows(supabase, userId);
+    if (!data) return { userId, profile, ready: false, vip, owned: new Set() };
+    rows = data as InventoryRow[];
   } catch {
     return { userId, profile, ready: false, vip, owned: new Set() };
   }
@@ -103,7 +106,10 @@ export async function buyItem(itemId: string): Promise<ActionResult> {
       .update({ blue_essence: p.blue_essence - item.price })
       .eq('id', userId).eq('blue_essence', p.blue_essence)
       .select('blue_essence');
-    if (upd?.length) return { ok: true, balance: upd[0].blue_essence as number, message: `${item.name} agora é seu!` };
+    if (upd?.length) {
+      await notify(userId, { kind: 'loja', title: `Você comprou ${item.name}`, body: `-${item.price.toLocaleString('pt-BR')} de Essência Azul. Equipe no seu perfil.`, link: '/perfil' });
+      return { ok: true, balance: upd[0].blue_essence as number, message: `${item.name} agora é seu!` };
+    }
   }
   await rollback();
   return { ok: false, error: 'Não deu para concluir agora. Tente de novo.' };
@@ -130,6 +136,11 @@ export async function claimBeta(): Promise<ActionResult> {
     const { error } = await admin.from('inventory')
       .upsert(BETA_GRANTS.map(item_id => ({ user_id: userId, item_id, source: 'beta' })), { onConflict: 'user_id,item_id', ignoreDuplicates: true });
     if (error) console.error('[loja] itens do beta ficaram para a próxima visita', error); // loadStoreSession entrega depois
+    await notify(userId, {
+      kind: 'recompensa', title: 'Bônus de Alpha Tester resgatado!',
+      body: `+${BETA_BE.toLocaleString('pt-BR')} de Essência Azul, título Alpha Tester, borda Prata Lunar, Chuva de Confete e 1 troca de nome.`,
+      link: '/perfil',
+    });
     return { ok: true, balance: upd[0].blue_essence as number, message: 'Bônus de Alpha Tester resgatado!' };
   }
   return { ok: false, error: 'Não deu para resgatar agora. Tente de novo.' };

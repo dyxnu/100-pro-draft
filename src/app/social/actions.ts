@@ -24,9 +24,7 @@ export async function sendChatAction(channel: string, raw: string): Promise<Chat
   if (!target) return { ok: false, error: 'Canal de chat inválido.' };
   const body = cleanBody(String(raw ?? ''));
   if (!body) return { ok: false, error: 'Escreva alguma coisa.' };
-  if (target.roomId === null && profile.is_guest) {
-    return { ok: false, error: 'Convidados só leem o chat global. Crie uma conta para conversar.' };
-  }
+  if (target.roomId === null) return { ok: false, error: 'O chat é só dentro das salas.' };
 
   const admin = createAdminClient();
   if (target.roomId) {

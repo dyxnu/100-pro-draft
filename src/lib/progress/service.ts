@@ -4,7 +4,9 @@ import 'server-only';
 import { createAdminClient } from '@/lib/supabase/admin';
 import { ROLES, type AuctionState } from '@/lib/auction/engine';
 import type { TournamentState } from '@/lib/tournament/engine';
-import { type Rank, type Tier, applyLp, higherTier, rankScore } from './rank';
+import { TIERS, TIER_LABEL, type Rank, type Tier, applyLp, higherTier, rankLabel, rankScore } from './rank';
+import { notify, type NotifInput } from '@/lib/notify/service';
+import { REFERRAL_MILESTONES } from '@/lib/store/catalog';
 import { BE_PER_LEVEL, HONOR_PER_GAME, VIP_DAYS_PER_REFERRAL, addHonor, addXp, rewardsFor } from './rewards';
 
 type Admin = ReturnType<typeof createAdminClient>;
@@ -60,6 +62,8 @@ export async function recordResults(roomId: string, s: AuctionState, t: Tourname
     }
   }
 }
+
+const PLACE_LABEL = (n: number) => (n === 1 ? 'Campeão' : n === 2 ? 'Vice-campeão' : `${n}º lugar`);
 
 async function recordOne(
   admin: Admin, roomId: string, userId: string, playerId: string, s: AuctionState, t: TournamentState,
@@ -128,6 +132,24 @@ async function recordOne(
     }), { onConflict: 'user_id,champion_id' });
   }
 
+  // Notificações do resultado
+  if (!guest) {
+    const parts = [
+      ranked ? `${r.lp >= 0 ? '+' : ''}${r.lp} PDL` : null,
+      `+${be + lv.levelsUp * BE_PER_LEVEL} de Essência Azul`,
+      `+${r.xp} XP`,
+    ].filter(Boolean).join(' · ');
+    const list: NotifInput[] = [{ kind: 'campeonato', title: `${PLACE_LABEL(placement)} em um campeonato ${ranked ? 'ranqueado' : 'casual'}`, body: parts, link: '/perfil' }];
+    if (lv.levelsUp > 0) list.push({ kind: 'recompensa', title: `Você chegou ao nível ${lv.level}!`, body: `+${lv.levelsUp * BE_PER_LEVEL} de Essência Azul de bônus.`, link: '/loja' });
+    const oldTier = p.rank_tier as Tier | null;
+    if (ranked && rank.tier && rank.tier !== oldTier && (!oldTier || TIERS.indexOf(rank.tier) > TIERS.indexOf(oldTier))) {
+      list.push({ kind: 'elo', title: `Promovido para ${TIER_LABEL[rank.tier]}!`, body: rankLabel(rank), link: '/perfil' });
+    }
+    if (placement === 1 && p.titles_won === 0) list.push({ kind: 'recompensa', title: 'Novo título: Primeira Taça', body: 'Equipe no seu perfil.', link: '/perfil' });
+    if (honor.level > p.honor_level) list.push({ kind: 'recompensa', title: `Honra nível ${honor.level}`, body: honor.level >= 5 ? 'Você ganhou o título Honrado!' : 'Continue jogando limpo.', link: '/perfil' });
+    await notify(userId, list);
+  }
+
   // Convite: o primeiro campeonato do convidado dá dias de VIP para quem convidou
   if (!guest && p.referred_by && p.tournaments === 0) {
     const { data: ref } = await admin.from('referrals').upsert({ referrer: p.referred_by, referred: userId, rewarded: true }, { onConflict: 'referred', ignoreDuplicates: true }).select('referred');
@@ -135,6 +157,13 @@ async function recordOne(
       const { data: inviter } = await admin.from('profiles').select('vip_until').eq('id', p.referred_by).single();
       const base = inviter?.vip_until && new Date(inviter.vip_until).getTime() > Date.now() ? new Date(inviter.vip_until).getTime() : Date.now();
       await admin.from('profiles').update({ vip_until: new Date(base + VIP_DAYS_PER_REFERRAL * 86_400_000).toISOString() }).eq('id', p.referred_by);
+      await notify(p.referred_by, { kind: 'vip', title: `+${VIP_DAYS_PER_REFERRAL} dias de VIP!`, body: `${p.username} entrou pelo seu convite e jogou o primeiro campeonato.`, link: '/vip' });
+      const { count } = await admin.from('referrals').select('referred', { count: 'exact', head: true }).eq('referrer', p.referred_by).eq('rewarded', true);
+      const goal = REFERRAL_MILESTONES.find(m => m.item && m.friends === count);
+      if (goal?.item) {
+        await admin.from('inventory').upsert({ user_id: p.referred_by, item_id: goal.item, source: 'convite' }, { onConflict: 'user_id,item_id', ignoreDuplicates: true });
+        await notify(p.referred_by, { kind: 'recompensa', title: `Meta de convites: ${goal.label}!`, body: `${goal.friends} amigos já jogaram pelo seu convite.`, link: '/perfil' });
+      }
     }
   }
 }

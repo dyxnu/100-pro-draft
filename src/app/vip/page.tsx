@@ -6,8 +6,10 @@ import { VIP_DAYS_PER_REFERRAL } from '@/lib/progress/rewards';
 import { canClaimBeta, daysLeft } from '@/lib/store/rules';
 import { loadReferralStats, loadStoreSession } from '@/lib/store/service';
 import { BetaBanner } from '../loja/BetaBanner';
-import { CopyInvite } from './CopyInvite';
+import { InviteCard } from './InviteCard';
+import { REFERRAL_MILESTONES } from '@/lib/store/catalog';
 import '../loja/store.css';
+import './vip.css';
 
 export const metadata: Metadata = { title: 'VIP', description: 'Convide amigos e ganhe dias de VIP no 100 pro Draft.' };
 
@@ -54,11 +56,7 @@ export default async function VipPage() {
 
       {s.ready && canClaimBeta(p) && <BetaBanner />}
 
-      <section className="panel flex flex-col gap-4 p-5 sm:p-6">
-        <div>
-          <p className="eyebrow">Seu link de convite</p>
-          <h2 className="text-xl font-black text-gold2">Chame a galera para o leilão</h2>
-        </div>
+      <section className="flex flex-col gap-4">
         {!s.userId && (
           <p className="text-sm text-muted"><Link href="/entrar?next=/vip" className="font-bold text-accent underline">Entre</Link> ou <Link href="/cadastro" className="font-bold text-accent underline">crie sua conta</Link> para ganhar seu link.</p>
         )}
@@ -69,21 +67,11 @@ export default async function VipPage() {
           <p className="text-sm text-muted">Seu link aparece aqui em breve (estamos preparando o programa de convites).</p>
         )}
         {member && invite && (
-          <>
-            <CopyInvite url={invite} />
-            <div className="st-stats">
-              <div className="st-stat"><b>{stats.signedUp}</b><span>amigos criaram conta</span></div>
-              <div className="st-stat"><b>{stats.played}</b><span>amigos já jogaram um campeonato</span></div>
-              <div className="st-stat"><b>+{stats.played * VIP_DAYS_PER_REFERRAL}</b><span>dias de VIP ganhos</span></div>
-              <div className="st-stat"><b>{s.vip ? `${left}d` : '—'}</b><span>{s.vip && p?.vip_until ? `VIP até ${fmtDate(p.vip_until)}` : 'sem VIP ativo'}</span></div>
-            </div>
-          </>
+          <InviteCard
+            url={invite} played={stats.played} signedUp={stats.signedUp} vipDays={VIP_DAYS_PER_REFERRAL}
+            milestones={REFERRAL_MILESTONES.map(m => ({ friends: m.friends, label: m.label, done: stats.played >= m.friends }))}
+          />
         )}
-        <ol className="st-steps">
-          <li>Copie seu link e mande para os amigos.</li>
-          <li>Eles criam a conta pelo link (o convite fica guardado por 30 dias).</li>
-          <li>Quando o amigo termina o primeiro campeonato, você ganha +{VIP_DAYS_PER_REFERRAL} dias de VIP.</li>
-        </ol>
       </section>
 
       <section className="st-plans">
@@ -104,12 +92,12 @@ export default async function VipPage() {
           <span className="st-plan-tag" style={{ background: 'linear-gradient(180deg,#ffe7a0,#d9a83c)', color: '#3b2a05' }}>Por convite</span>
           <div>
             <p className="eyebrow">VIP</p>
-            <h3 className="text-2xl font-black text-gold2">Apoiador VIP</h3>
+            <h3 className="text-2xl font-black text-gold2">VIP</h3>
           </div>
           <ul>
             <li>Tudo do plano grátis</li>
             <li><b>+25% de Essência Azul</b> por campeonato</li>
-            <li>Título <span className="font-black text-[#a07a1f]">&ldquo;Apoiador VIP&rdquo;</span> e Borda VIP animada</li>
+            <li>Borda VIP animada</li>
             <li>Nome colorido no chat</li>
             <li>Emblema VIP no perfil</li>
           </ul>
@@ -121,7 +109,7 @@ export default async function VipPage() {
             <p className="eyebrow">Assinatura</p>
             <h3 className="text-2xl font-black text-gold2">Apoiar com assinatura</h3>
           </div>
-          <p className="text-sm text-muted">Quer ajudar a manter o servidor no ar? Em breve vai dar para apoiar o projeto com uma assinatura e ganhar os mesmos benefícios do VIP.</p>
+          <p className="text-sm text-muted">Quer ajudar a manter o servidor no ar? Em breve vai dar para apoiar o projeto com uma assinatura: os mesmos benefícios do VIP e o título exclusivo de quem apoia.</p>
           <button className="btn-secondary mt-auto" disabled>Em breve</button>
         </div>
       </section>

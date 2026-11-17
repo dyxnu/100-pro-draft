@@ -1,7 +1,7 @@
 // Regras puras do perfil: posse de cosméticos, validação de nome, valores padrão (migração 0006
 // ainda não aplicada) e textos do histórico. Sem acesso a banco: testável e usada pelas ações do servidor.
 import type { Profile } from '@/lib/supabase/server';
-import { FREE_ICONS, SKINS, TITLES, itemById } from '@/lib/store/catalog';
+import { CATALOG, FREE_ICONS, SKINS, TITLES, itemById } from '@/lib/store/catalog';
 import { isAvatar } from '@/lib/profile/avatars';
 import { isOffensive } from '@/lib/moderation/profanity';
 import { NAME_CHANGE_PRICE } from '@/lib/progress/rewards';
@@ -23,6 +23,8 @@ export interface OwnerCtx {
   titles_won: number;
   honor_level: number;
   peak_tier: string | null;
+  tournaments?: number;
+  kudos_count?: number;
 }
 
 // ---------------------------------------------------------------------------
@@ -73,15 +75,18 @@ export function bannerOf(p: Pick<Profile, 'banner_id' | 'avatar_url'>): { champI
 export function ownedTitles(ctx: OwnerCtx): string[] {
   const earned = new Set<string>();
   if (ctx.is_beta) earned.add('title:alpha');
-  if (ctx.vip) earned.add('title:vip');
-  if (ctx.titles_won >= 1) earned.add('title:campeao');
-  if (ctx.titles_won >= 5) earned.add('title:pentacampeao');
+  // "Apoiador" (title:vip) só vem pelo inventário: é dado a quem apoia o projeto, não pelo VIP de convite.
+  if (ctx.titles_won >= 1) earned.add('title:primeira_taca');
+  if (ctx.titles_won >= 25) earned.add('title:dinastia');
+  if (ctx.titles_won >= 100) earned.add('title:imperador');
+  if ((ctx.tournaments ?? 0) >= 100) earned.add('title:veterano');
   if (ctx.honor_level >= 5) earned.add('title:honrado');
-  if (ctx.peak_tier === 'DESAFIANTE') earned.add('title:desafiante');
-  return TITLES.filter(t => {
-    if (t.vipOnly && !ctx.vip) return false; // título VIP some quando o VIP acaba
-    return earned.has(t.id) || ctx.inventory.has(t.id);
-  }).map(t => t.id);
+  if ((ctx.kudos_count ?? 0) >= 100) earned.add('title:querido');
+  const peak = ctx.peak_tier ? TIERS.indexOf(ctx.peak_tier as Tier) : -1;
+  if (peak >= TIERS.indexOf('MESTRE')) earned.add('title:mestre');
+  if (peak >= TIERS.indexOf('GRAO_MESTRE')) earned.add('title:grao_mestre');
+  if (peak >= TIERS.indexOf('DESAFIANTE')) earned.add('title:desafiante');
+  return TITLES.filter(t => earned.has(t.id) || ctx.inventory.has(t.id)).map(t => t.id);
 }
 
 /** Ícone válido e do jogador: campeão (legado, todos), ícone grátis, ou ícone no inventário. */
@@ -131,10 +136,7 @@ export function canEquip(kind: EquipKind, value: string | null, ctx: OwnerCtx): 
 
 /** Lista do que o jogador pode equipar em cada espaço (para os seletores). */
 export function ownedOf(kind: 'border' | 'theme' | 'victory', ctx: OwnerCtx): string[] {
-  const all = { border: ['border:prata', 'border:ouro', 'border:eclipse', 'border:aurora', 'border:supernova', 'border:vip'],
-    theme: ['theme:noite', 'theme:eclipse', 'theme:aurora', 'theme:hextec', 'theme:sombras'],
-    victory: ['victory:confete', 'victory:estrelas', 'victory:moonfall', 'victory:fogos'] }[kind];
-  return all.filter(id => canEquip(kind, id, ctx));
+  return CATALOG.filter(i => i.kind === kind).map(i => i.id).filter(id => canEquip(kind, id, ctx));
 }
 
 /** Ícones de perfil (números) que o jogador tem: grátis + inventário. */

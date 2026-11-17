@@ -8,6 +8,10 @@ import { NAME_CHANGE_PRICE } from '@/lib/progress/rewards';
 import { EssenceAmount, EssenceIcon } from '@/components/header/EssenceIcon';
 import { buyItemAction } from './actions';
 import { BetaBanner } from './BetaBanner';
+import { VictoryEffect } from '@/components/match/VictoryEffect';
+import { isVictoryFx } from '@/components/match/victory-fx';
+import '@/components/match/match.css';
+import '@/components/profile/cosmetics.css';
 
 export interface StoreProps {
   loggedIn: boolean;
@@ -36,17 +40,27 @@ const PAGE = 48;
 const byKind = (k: ItemKind) => CATALOG.filter(i => i.kind === k);
 const iconNum = (id: string) => Number(id.slice(5));
 
+/** Nomes dos ícones (5 mil): baixados só quando a aba de ícones abre. */
+type IconNames = Map<number, { name: string; year: number }>;
+let iconNamesCache: Promise<IconNames> | null = null;
+const loadIconNames = () => (iconNamesCache ??= import('@/lib/store/icons.json').then(m =>
+  new Map((m.default as [number, string, number][]).map(([id, name, year]) => [id, { name, year }]))));
+
 export function StoreView(p: StoreProps) {
   const [tab, setTab] = useState<Tab>('skin');
   const [balance, setBalance] = useState(p.balance);
   const [owned, setOwned] = useState(() => new Set(p.owned));
-  const [beta, setBeta] = useState(p.betaClaimable);
+  const [beta] = useState(p.betaClaimable);
   const [preview, setPreview] = useState<StoreItem | null>(null);
   const [q, setQ] = useState('');
   const [rarity, setRarity] = useState<StoreItem['rarity'] | ''>('');
   const [champ, setChamp] = useState('');
   const [hideOwned, setHideOwned] = useState(false);
   const [limit, setLimit] = useState(PAGE);
+  const [iconNames, setIconNames] = useState<IconNames | null>(null);
+  useEffect(() => {
+    if (tab === 'icon' && !iconNames) loadIconNames().then(setIconNames).catch(() => {});
+  }, [tab, iconNames]);
 
   useEffect(() => { setBalance(p.balance); setOwned(new Set(p.owned)); }, [p.balance, p.owned]);
   useEffect(() => { setLimit(PAGE); }, [tab, q, rarity, champ, hideOwned]);
@@ -66,10 +80,18 @@ export function StoreView(p: StoreProps) {
         (!champ || i.champId === champ) &&
         (!t || normalize(i.name).includes(t) || normalize(p.champNames[i.champId ?? ''] ?? '').includes(t)));
     }
+    if (tab === 'icon') {
+      if (iconNames) {
+        list = list.map(i => ({ ...i, name: iconNames.get(iconNum(i.id))?.name ?? i.name }))
+          .sort((a, b) => (iconNames.get(iconNum(b.id))?.year ?? 0) - (iconNames.get(iconNum(a.id))?.year ?? 0) || iconNum(b.id) - iconNum(a.id));
+      }
+      const t = normalize(q.trim());
+      if (t) list = list.filter(i => normalize(i.name).includes(t) || i.id.slice(5) === t);
+    }
     if (rarity) list = list.filter(i => i.rarity === rarity);
     if (hideOwned) list = list.filter(i => !owned.has(i.id) && !isFreeItem(i.id));
     return list;
-  }, [tab, q, champ, rarity, hideOwned, owned, p.champNames]);
+  }, [tab, q, champ, rarity, hideOwned, owned, p.champNames, iconNames]);
 
   const onBought = (item: StoreItem, newBalance: number) => {
     setBalance(newBalance);
@@ -103,11 +125,11 @@ export function StoreView(p: StoreProps) {
         <p className="st-note">A loja está sendo preparada. Seu saldo e seus itens aparecem aqui em breve.</p>
       )}
 
-      {beta && <BetaBanner onClaimed={b => { setBalance(b); setBeta(false); }} />}
+      {beta && <BetaBanner onClaimed={b => setBalance(b)} />}
 
       <div className="st-tabs" role="tablist">
         {TABS.map(t => (
-          <button key={t.id} role="tab" aria-selected={tab === t.id} className={tab === t.id ? 'on' : ''} onClick={() => setTab(t.id)}>
+          <button key={t.id} role="tab" aria-selected={tab === t.id} className={tab === t.id ? 'on' : ''} onClick={() => { setTab(t.id); setQ(''); setRarity(''); }}>
             {t.label}
           </button>
         ))}
@@ -115,6 +137,9 @@ export function StoreView(p: StoreProps) {
 
       {tab !== 'service' && (
         <div className="st-filters">
+          {tab === 'icon' && (
+            <input className="input st-search" placeholder="Buscar ícone (ex.: Diana, Mundial, K/DA)…" value={q} onChange={e => setQ(e.target.value)} />
+          )}
           {tab === 'skin' && (
             <>
               <input className="input st-search" placeholder="Buscar skin ou campeão…" value={q} onChange={e => setQ(e.target.value)} />
@@ -126,7 +151,7 @@ export function StoreView(p: StoreProps) {
           )}
           <div className="st-chips">
             <button className={rarity === '' ? 'on' : ''} onClick={() => setRarity('')}>Todas</button>
-            {RARITY_ORDER.map(r => (
+            {RARITY_ORDER.filter(r => byKind(tab).some(i => i.rarity === r)).map(r => (
               <button key={r} className={rarity === r ? 'on' : ''} style={{ '--rc': RARITY_COLOR[r] } as CSSProperties} onClick={() => setRarity(r)}>
                 <i />{RARITY_LABEL[r]}
               </button>
@@ -221,13 +246,21 @@ function Art({ item, avatar, big = false }: { item: StoreItem; avatar: string; b
       return <img src={profileIconUrl(iconNum(item.id))} alt="" loading="lazy" className="st-icon" />;
     case 'border':
       return (
-        <span className={`st-bd st-bd-${key}`}>
+        <span className={`st-bd cos-border-${key}`}>
           <img src={avatar} alt="" className="st-bd-av" />
         </span>
       );
     case 'theme':
-      return <span className={`st-th st-th-${key}`}><i /><i /><i /></span>;
+      return <span className={`st-th cos-theme-${key}`}><i /><i /><i /></span>;
     case 'victory':
+      if (big && isVictoryFx(item.id)) {
+        return (
+          <span className="st-fx st-fx-live">
+            <VictoryEffect kind={item.id} color="#6d63db" />
+            <b>Vitória!</b>
+          </span>
+        );
+      }
       return (
         <span className={`st-fx st-fx-${key}`}>
           {Array.from({ length: 14 }, (_, i) => <i key={i} style={{ '--i': i } as CSSProperties} />)}
@@ -235,7 +268,7 @@ function Art({ item, avatar, big = false }: { item: StoreItem; avatar: string; b
         </span>
       );
     case 'title':
-      return <span className="st-tt"><span className={`st-title st-title-${key}`}>{item.name}</span></span>;
+      return <span className="st-tt"><span className={`st-title cos-title cos-title-${key}`}>{item.name}</span></span>;
     default:
       return null;
   }

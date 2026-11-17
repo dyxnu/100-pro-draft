@@ -127,6 +127,10 @@ function Customize({ options, onClose }: { options: EditorOptions; onClose: () =
     const t = strip(q.trim());
     return t ? AVATARS.filter(a => strip(a.name).includes(t)) : AVATARS;
   }, [q]);
+  const skins = useMemo(() => {
+    const t = strip(q.trim());
+    return t ? options.skinBanners.filter(b => strip(b.name).includes(t)) : options.skinBanners;
+  }, [q, options.skinBanners]);
 
   const itemList = (kind: 'border' | 'theme' | 'victory', items: NamedItem[], current: string | null, allowNone: boolean) => (
     <>
@@ -140,7 +144,7 @@ function Customize({ options, onClose }: { options: EditorOptions; onClose: () =
         )}
         {items.map(it => (
           <button key={it.id} type="button" disabled={pending} className={`pf-item ${current === it.id ? 'on' : ''}`} onClick={() => equip(kind, it.id)}>
-            <span className={`pf-item-swatch pf-swatch-${it.id.replace(':', '-')}`} />
+            <span className={kind === 'border' ? `pf-item-swatch is-border cos-border-${it.id.slice(7)}` : kind === 'theme' ? `pf-item-swatch is-theme cos-theme-${it.id.slice(6)}` : `pf-item-swatch pf-swatch-${it.id.replace(':', '-')}`} />
             <span className="pf-item-name">{it.name}</span>
             <span className={`pf-rarity pf-rarity-${it.rarity}`}>{it.rarity}</span>
           </button>
@@ -160,11 +164,15 @@ function Customize({ options, onClose }: { options: EditorOptions; onClose: () =
       <div className="pf-modal-scroll">
         {tab === 'banner' && (
           <div className="space-y-4">
-            {options.skinBanners.length > 0 && (
+            <input className="input" placeholder="Buscar skin ou campeão…" value={q} onChange={e => setQ(e.target.value)} />
+            {options.skinBanners.length === 0 && (
+              <p className="text-sm text-muted">Skins que você comprar na <Link href="/loja" className="text-gold hover:underline">loja</Link> viram banner aqui.</p>
+            )}
+            {skins.length > 0 && (
               <div>
-                <p className="label">Suas skins</p>
+                <p className="label">Suas skins ({skins.length})</p>
                 <div className="pf-banner-grid">
-                  {options.skinBanners.map(b => (
+                  {skins.slice(0, 120).map(b => (
                     <button key={b.id} type="button" disabled={pending} title={b.name}
                       className={`pf-banner-opt ${cur.banner === b.id ? 'on' : ''}`} onClick={() => equip('banner', b.id)}>
                       <img src={b.img} alt="" loading="lazy" />
@@ -181,7 +189,6 @@ function Customize({ options, onClose }: { options: EditorOptions; onClose: () =
                   Usar o campeão do ícone
                 </button>
               </div>
-              <input className="input" placeholder="Buscar campeão…" value={q} onChange={e => setQ(e.target.value)} />
               <div className="pf-champ-grid mt-3">
                 {champs.map(a => {
                   const id = `banner:${a.id}_0`;

@@ -1,7 +1,5 @@
 /* Página inicial (prefixo hm-). Animações só em transform/opacity. */
 
-.hm-pixelfont { font-family: var(--font-pixel), ui-monospace, monospace; letter-spacing: 0; }
-
 /* ───────── Hero: noite lunar ───────── */
 .hm-hero {
   position: relative; isolation: isolate; overflow: hidden;
@@ -77,25 +75,23 @@
 
 .hm-stat { border-left: 2px solid rgba(243, 214, 138, .5); padding-left: .75rem; }
 
+
 /* ───────── Carrossel 3D de cartas ───────── */
+.hm-stage-wrap { position: relative; }
 .hm-stage {
-  --card-w: 150px; --card-h: 272px; --r: 270px;
-  position: relative; height: calc(var(--card-h) + 180px);
-  perspective: 1100px; perspective-origin: 50% 40%;
-  overflow: hidden; touch-action: pan-y;
-  -webkit-mask-image: linear-gradient(90deg, transparent, #000 12%, #000 88%, transparent);
-  mask-image: linear-gradient(90deg, transparent, #000 12%, #000 88%, transparent);
+  --card-w: 158px; --card-h: 287px; --r: 300px;
+  position: relative; height: calc(var(--card-h) + 150px);
+  perspective: 1200px; perspective-origin: 50% 38%;
+  overflow: hidden; touch-action: pan-y; cursor: grab;
+  user-select: none; -webkit-user-select: none; -webkit-touch-callout: none;
+  -webkit-mask-image: linear-gradient(90deg, transparent, #000 10%, #000 90%, transparent);
+  mask-image: linear-gradient(90deg, transparent, #000 10%, #000 90%, transparent);
 }
-@media (max-width: 640px) { .hm-stage { --card-w: 104px; --card-h: 189px; --r: 185px; } }
-.hm-tilt {
-  position: absolute; left: 50%; top: 47%; width: 0; height: 0;
-  transform-style: preserve-3d;
-  transform: rotateX(calc(-9deg + var(--rx, 0deg))) rotateY(var(--ry, 0deg));
-  transition: transform .5s cubic-bezier(.2, .8, .2, 1);
-}
-.hm-ring { position: absolute; inset: 0; transform-style: preserve-3d; animation: hmSpin 48s linear infinite; }
-.hm-stage:hover .hm-ring, .hm-stage:focus-within .hm-ring { animation-play-state: paused; }
-@keyframes hmSpin { to { transform: rotateY(-360deg); } }
+.hm-stage:active { cursor: grabbing; }
+@media (max-width: 640px) { .hm-stage { --card-w: 112px; --card-h: 204px; --r: 200px; height: calc(var(--card-h) + 110px); } }
+.hm-stage img { pointer-events: none; -webkit-user-drag: none; }
+.hm-tilt { position: absolute; left: 50%; top: 46%; width: 0; height: 0; transform-style: preserve-3d; transform: rotateX(-8deg); }
+.hm-ring { position: absolute; inset: 0; transform-style: preserve-3d; will-change: transform; }
 .hm-card {
   position: absolute; width: var(--card-w); height: var(--card-h);
   left: calc(var(--card-w) / -2); top: calc(var(--card-h) / -2);
@@ -103,17 +99,22 @@
   transform: rotateY(calc(var(--i) * 360deg / var(--n))) translateZ(var(--r));
 }
 .hm-face, .hm-back {
-  position: absolute; inset: 0; border-radius: 14px; overflow: hidden;
+  position: absolute; inset: 0; border-radius: 12px; overflow: hidden;
   -webkit-backface-visibility: hidden; backface-visibility: hidden;
-  box-shadow: 0 0 0 2px #c9a14a, 0 0 0 4px rgba(20, 23, 63, .9), 0 30px 50px -20px rgba(0, 0, 0, .7);
+  box-shadow: 0 0 0 2px #8a6a2a, 0 0 0 4px rgba(14, 16, 46, .9), 0 30px 50px -20px rgba(0, 0, 0, .7);
+  transition: box-shadow .35s ease, filter .35s ease;
 }
+.hm-face { filter: brightness(.62) saturate(.85); }
 .hm-face img { width: 100%; height: 100%; object-fit: cover; transform: scale(1.04); }
 .hm-face::after {
-  content: ''; position: absolute; inset: 0;
-  background: linear-gradient(0deg, rgba(14, 16, 46, .92) 0%, rgba(14, 16, 46, .1) 42%, transparent 60%),
-              linear-gradient(115deg, transparent 40%, rgba(255, 255, 255, .18) 50%, transparent 60%);
+  content: ""; position: absolute; inset: 0;
+  background: linear-gradient(0deg, rgba(14, 16, 46, .55) 0%, transparent 40%),
+              linear-gradient(115deg, transparent 40%, rgba(255, 255, 255, .16) 50%, transparent 60%);
 }
-.hm-face figcaption { position: absolute; inset: auto 0 0 0; z-index: 1; padding: .6rem .5rem; text-align: center; }
+.hm-card.is-front .hm-face {
+  filter: none;
+  box-shadow: 0 0 0 2px #f3d68a, 0 0 0 4px rgba(14, 16, 46, .9), 0 0 38px 6px rgba(243, 214, 138, .45), 0 30px 50px -20px rgba(0, 0, 0, .7);
+}
 .hm-back {
   transform: rotateY(180deg);
   background:
@@ -124,107 +125,121 @@
 }
 .hm-back svg { width: 55%; opacity: .85; }
 .hm-floor {
-  position: absolute; left: 50%; bottom: 18px; width: min(90%, 560px); height: 60px; transform: translateX(-50%);
-  background: radial-gradient(ellipse at center, rgba(232, 229, 255, .35), rgba(109, 99, 219, .15) 40%, transparent 70%);
+  position: absolute; left: 50%; bottom: 10px; width: min(90%, 560px); height: 60px; transform: translateX(-50%);
+  background: radial-gradient(ellipse at center, rgba(243, 214, 138, .3), rgba(109, 99, 219, .15) 40%, transparent 70%);
   filter: blur(6px); pointer-events: none;
 }
+.hm-nameplate { position: relative; margin-top: -26px; text-align: center; min-height: 64px; pointer-events: none; }
+.hm-nameplate-in { animation: hmPlate .45s cubic-bezier(.2, .8, .2, 1) both; }
+@keyframes hmPlate { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: none; } }
+.hm-np-name { font-size: clamp(1.4rem, 3vw, 2rem); font-weight: 900; line-height: 1; color: #fff; text-transform: uppercase; letter-spacing: .06em; text-shadow: 0 4px 20px rgba(243, 214, 138, .45); }
+.hm-np-title { margin-top: 4px; font-size: .85rem; font-style: italic; color: #f3d68a; }
+.hm-np-hint { margin-top: 6px; font-size: 10px; font-weight: 800; letter-spacing: .18em; text-transform: uppercase; color: rgba(232, 229, 255, .45); }
 
-/* ───────── Pixel art ───────── */
-.hm-pixel { image-rendering: pixelated; image-rendering: crisp-edges; display: block; }
-.hm-scene {
-  container-type: inline-size;
-  position: relative; overflow: hidden; border-radius: 1.5rem; height: 250px;
-  background: linear-gradient(180deg, #171a4a 0%, #262a72 52%, #2d6a4a 52%, #2d6a4a 100%);
-  box-shadow: inset 0 0 0 4px #14173f, 0 24px 50px -30px rgba(20, 23, 63, .8);
+/* ───────── Seção escura (em ação) ───────── */
+.hm-dark {
+  position: relative; overflow: hidden; border-radius: 2rem; color: #fff;
+  background: radial-gradient(70% 90% at 85% 0%, #2c2f80 0%, transparent 60%), linear-gradient(180deg, #0f1235, #171a4a);
+  box-shadow: inset 0 0 0 1px rgba(232, 229, 255, .1);
 }
-@media (max-width: 640px) { .hm-scene { height: 210px; } }
-.hm-scene-stars {
-  position: absolute; left: 0; top: 0; width: 3px; height: 3px; background: #e8e5ff;
-  box-shadow: 40px 20px #e8e5ff, 120px 44px #fff3c4, 210px 18px #e8e5ff, 300px 60px #e8e5ff, 380px 26px #fff,
-    470px 50px #e8e5ff, 560px 16px #fff3c4, 650px 40px #e8e5ff, 740px 22px #fff, 830px 58px #e8e5ff, 920px 30px #fff3c4,
-    1010px 48px #e8e5ff, 1100px 14px #fff, 80px 80px #c9c3f5, 260px 90px #c9c3f5, 520px 84px #c9c3f5, 780px 92px #c9c3f5, 1040px 86px #c9c3f5;
-  animation: hmTwinkle 3s steps(2) infinite;
+.hm-action { display: grid; gap: 12px; grid-template-columns: minmax(0, 1.6fr) minmax(0, 1fr); }
+.hm-action-side { display: grid; gap: 12px; }
+@media (max-width: 767px) {
+  .hm-action { grid-template-columns: 1fr; }
+  .hm-action-side { grid-template-columns: 1fr 1fr; }
 }
-@keyframes hmTwinkle { 50% { opacity: .45; } }
-.hm-scene-moon { position: absolute; right: 8%; top: 14px; width: 54px; height: 54px; }
-.hm-ground {
-  position: absolute; left: 0; right: 0; bottom: 0; height: 48%;
-  background:
-    repeating-linear-gradient(90deg, rgba(0, 0, 0, .08) 0 12px, transparent 12px 24px),
-    repeating-linear-gradient(0deg, rgba(255, 255, 255, .05) 0 12px, transparent 12px 24px),
-    linear-gradient(180deg, #3f8a52 0 8px, #2d6a4a 8px);
+.hm-clip { position: relative; margin: 0; overflow: hidden; border-radius: 16px; aspect-ratio: 16 / 9; background: #0b0d2a; box-shadow: 0 0 0 1px rgba(243, 214, 138, .35), 0 24px 40px -24px rgba(0, 0, 0, .8); }
+.hm-clip video { width: 100%; height: 100%; object-fit: cover; display: block; }
+.hm-clip figcaption {
+  position: absolute; inset: auto 0 0 0; display: flex; align-items: center; gap: 10px; padding: 26px 12px 10px;
+  background: linear-gradient(0deg, rgba(8, 10, 32, .92), transparent);
 }
-.hm-path {
-  position: absolute; left: 0; right: 0; bottom: 22%; height: 34px;
-  background: repeating-linear-gradient(90deg, #b99a5d 0 12px, #a8894e 12px 24px);
-  box-shadow: 0 -4px 0 #8c6f3c, 0 4px 0 #8c6f3c;
+.hm-clip figcaption b { display: block; font-size: 15px; line-height: 1.1; }
+.hm-clip figcaption small { display: block; font-size: 11px; color: #c9c3f5; }
+.hm-clip-key {
+  display: grid; place-items: center; width: 30px; height: 30px; flex: none; border-radius: 8px; font-weight: 900; font-size: 14px;
+  color: #f3d68a; background: rgba(14, 16, 46, .85); border: 1px solid #c8aa6e;
 }
-.hm-river {
-  position: absolute; left: 50%; bottom: 0; width: 72px; height: 48%; transform: translateX(-50%);
-  background: repeating-linear-gradient(0deg, #3b6fd6 0 8px, #4f86ea 8px 16px);
-  box-shadow: -4px 0 0 #7bb0ff, 4px 0 0 #7bb0ff;
-}
-.hm-river::after {
-  content: ''; position: absolute; inset: 0;
-  background: repeating-linear-gradient(0deg, transparent 0 14px, rgba(255, 255, 255, .55) 14px 16px);
-  animation: hmFlow 1.2s steps(4) infinite;
-}
-@keyframes hmFlow { to { transform: translateY(16px); } }
-.hm-tower { position: absolute; bottom: 22%; width: 44px; height: 88px; }
-.hm-tower.l { left: 2%; } .hm-tower.r { right: 2%; }
-.hm-walker {
-  position: absolute; left: 0; will-change: transform;
-  animation: hmWalkR var(--dur, 16s) linear infinite; animation-delay: var(--delay, 0s);
-}
-.hm-walker.rev { animation-name: hmWalkL; }
-@keyframes hmWalkR { from { transform: translateX(-90px); } to { transform: translateX(calc(100cqw + 90px)); } }
-@keyframes hmWalkL { from { transform: translateX(calc(100cqw + 90px)); } to { transform: translateX(-90px); } }
-.hm-hop { animation: hmHop .5s steps(2) infinite; animation-delay: var(--hop, 0s); }
-@keyframes hmHop { 50% { transform: translateY(-5px); } }
-.hm-shadow { width: 70%; height: 5px; margin: 2px auto 0; background: rgba(0, 0, 0, .3); border-radius: 50%; }
-.hm-tag {
-  position: absolute; left: 50%; bottom: 100%; transform: translate(-50%, -4px); white-space: nowrap;
-  font-size: 8px; line-height: 1; padding: 4px 5px; color: #14173f; background: #f3d68a;
-  box-shadow: 0 0 0 2px #14173f;
-}
-.hm-tag::after { content: ''; position: absolute; left: 50%; top: 100%; width: 4px; height: 4px; transform: translateX(-50%); background: #f3d68a; }
-.hm-coin { animation: hmCoin 2.4s ease-in infinite; animation-delay: var(--delay, 0s); opacity: 0; }
-@keyframes hmCoin { 0% { opacity: 0; transform: translateY(0); } 15% { opacity: 1; } 70% { opacity: 1; transform: translateY(-40px); } 100% { opacity: 0; transform: translateY(-48px); } }
+.hm-clip.big figcaption b { font-size: 20px; }
+@media (max-width: 767px) { .hm-clip:not(.big) figcaption { padding: 18px 8px 6px; } .hm-clip:not(.big) figcaption small { display: none; } }
 
 /* ───────── Como funciona ───────── */
-.hm-step { position: relative; overflow: hidden; transition: transform .25s ease, box-shadow .25s ease; }
-.hm-step:hover { transform: translateY(-4px); box-shadow: 0 24px 40px -24px rgba(38, 42, 114, .5); }
-.hm-illus {
-  position: relative; height: 150px; border-radius: 1rem; overflow: hidden;
-  background: radial-gradient(circle at 50% 120%, #4c4fb5, #1c2058 70%);
-  box-shadow: inset 0 0 0 3px #14173f;
+.hm-step {
+  position: relative; overflow: hidden; border-radius: 18px; padding: 10px; background: var(--color-panel);
+  border: 1px solid var(--color-line); transition: transform .25s ease, box-shadow .25s ease;
 }
-.hm-bid { position: absolute; opacity: 0; animation: hmBid 4.5s ease-in-out infinite; animation-delay: var(--delay, 0s); }
-@keyframes hmBid { 0% { opacity: 0; transform: translateY(10px) scale(.9); } 8%, 28% { opacity: 1; transform: none; } 36%, 100% { opacity: 0; transform: translateY(-10px); } }
-.hm-timer { transform-origin: left; animation: hmTimer 4.5s linear infinite; }
+.hm-step:hover { transform: translateY(-4px); box-shadow: 0 24px 40px -24px rgba(38, 42, 114, .5); }
+.hm-step-body { display: flex; align-items: flex-start; gap: 12px; padding: 14px 6px 6px; }
+.hm-step-body h3 { font-size: 1.1rem; font-weight: 900; color: var(--color-gold2); }
+.hm-step-body p { margin-top: 2px; font-size: .875rem; color: var(--color-muted); }
+.hm-step-n {
+  display: grid; place-items: center; width: 34px; height: 34px; flex: none; border-radius: 10px; font-weight: 900;
+  color: #f3d68a; background: linear-gradient(160deg, #262a72, #14173f); box-shadow: inset 0 0 0 1px #c8aa6e;
+}
+.hm-illus { position: relative; height: 170px; border-radius: 12px; overflow: hidden; background: #14173f; user-select: none; }
+.hm-illus img { -webkit-user-drag: none; }
+.hm-illus-bg { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; opacity: .35; filter: blur(2px) saturate(1.1); transform: scale(1.1); }
+.hm-illus-bid::after { content: ""; position: absolute; inset: 0; background: linear-gradient(90deg, rgba(14, 16, 46, .2), rgba(14, 16, 46, .85)); }
+.hm-bidcard {
+  position: absolute; z-index: 1; left: 16px; top: 14px; width: 76px; height: 138px; border-radius: 8px; overflow: hidden;
+  box-shadow: 0 0 0 2px #c8aa6e, 0 12px 24px -8px #000; animation: hmFloatCard 4s ease-in-out infinite;
+}
+.hm-bidcard img { width: 100%; height: 100%; object-fit: cover; }
+.hm-bidcard span { position: absolute; inset: auto 0 0 0; padding: 14px 4px 4px; text-align: center; font-size: 11px; font-weight: 900; color: #fff; background: linear-gradient(0deg, rgba(14, 16, 46, .95), transparent); }
+@keyframes hmFloatCard { 50% { transform: translateY(-4px) rotate(-1deg); } }
+.hm-bidfeed { position: absolute; z-index: 1; right: 14px; left: 108px; top: 30px; height: 60px; }
+.hm-bid {
+  position: absolute; inset: 0 0 auto 0; display: flex; align-items: center; gap: 8px; padding: 6px 10px; border-radius: 10px;
+  background: rgba(14, 16, 46, .8); border: 1px solid rgba(243, 214, 138, .5); color: #fff;
+  opacity: 0; animation: hmBid 4.5s ease-in-out infinite; animation-delay: var(--delay, 0s);
+}
+.hm-bid img { width: 26px; height: 26px; border-radius: 50%; }
+.hm-bid b { font-size: 18px; font-weight: 900; color: #f3d68a; }
+.hm-bid small { font-size: 11px; color: #c9c3f5; }
+@keyframes hmBid { 0% { opacity: 0; transform: translateY(14px) scale(.94); } 8%, 28% { opacity: 1; transform: none; } 36%, 100% { opacity: 0; transform: translateY(-14px); } }
+.hm-bidtimer { position: absolute; z-index: 1; left: 108px; right: 14px; bottom: 26px; height: 6px; border-radius: 99px; background: rgba(232, 229, 255, .15); overflow: hidden; }
+.hm-timer { display: block; height: 100%; background: linear-gradient(90deg, #f3d68a, #c8aa6e); transform-origin: left; animation: hmTimer 4.5s linear infinite; }
 @keyframes hmTimer { from { transform: scaleX(1); } to { transform: scaleX(0); } }
-.hm-slot { animation: hmSlot 7s ease-out infinite; animation-delay: var(--delay, 0s); opacity: 0; }
+.hm-illus-team { display: flex; align-items: center; justify-content: center; gap: 8px; background: radial-gradient(circle at 50% 120%, #34389a, #14173f 70%); }
+.hm-lane { display: grid; justify-items: center; gap: 6px; }
+.hm-lane-slot { display: grid; place-items: center; width: 50px; height: 50px; border-radius: 10px; border: 1px dashed rgba(200, 170, 110, .6); background: rgba(8, 10, 32, .5); }
+.hm-lane-slot img { width: 46px; height: 46px; border-radius: 8px; box-shadow: 0 0 0 2px #c8aa6e; }
+.hm-lane-ico { width: 22px; height: 22px; }
+.hm-lane small { font-size: 10px; font-weight: 800; letter-spacing: .08em; text-transform: uppercase; color: #c9c3f5; }
+.hm-slot { display: block; animation: hmSlot 7s ease-out infinite; animation-delay: var(--delay, 0s); opacity: 0; }
 @keyframes hmSlot { 0% { opacity: 0; transform: translateY(-14px) scale(.6); } 8% { opacity: 1; transform: translateY(2px) scale(1.08); } 12%, 82% { opacity: 1; transform: none; } 92%, 100% { opacity: 0; transform: scale(.8); } }
-.hm-clash-l { animation: hmClashL 1.6s ease-in-out infinite; }
-.hm-clash-r { animation: hmClashR 1.6s ease-in-out infinite; }
-@keyframes hmClashL { 40% { transform: translateX(14px); } 50% { transform: translateX(10px) rotate(-6deg); } }
-@keyframes hmClashR { 40% { transform: translateX(-14px); } 50% { transform: translateX(-10px) rotate(6deg); } }
-.hm-spark { animation: hmSpark 1.6s ease-out infinite; opacity: 0; }
-@keyframes hmSpark { 0%, 38% { opacity: 0; transform: scale(.3); } 48% { opacity: 1; transform: scale(1.2); } 70%, 100% { opacity: 0; transform: scale(1.6); } }
-.hm-trophy { animation: hmTrophy 2.4s ease-in-out infinite; }
+@media (max-width: 380px) { .hm-lane-slot { width: 44px; height: 44px; } .hm-lane-slot img { width: 40px; height: 40px; } }
+.hm-illus-cup { background: #0f1235; }
+.hm-vs-side { position: absolute; top: 0; bottom: 0; width: 56%; overflow: hidden; }
+.hm-vs-side img { width: 100%; height: 100%; object-fit: cover; }
+.hm-vs-side.l { left: 0; clip-path: polygon(0 0, 100% 0, 78% 100%, 0 100%); animation: hmClashL 2.4s ease-in-out infinite; }
+.hm-vs-side.r { right: 0; clip-path: polygon(22% 0, 100% 0, 100% 100%, 0 100%); animation: hmClashR 2.4s ease-in-out infinite; }
+.hm-vs-side.l::after { content: ""; position: absolute; inset: 0; background: linear-gradient(90deg, rgba(40, 90, 200, .35), transparent); }
+.hm-vs-side.r::after { content: ""; position: absolute; inset: 0; background: linear-gradient(270deg, rgba(200, 50, 70, .35), transparent); }
+@keyframes hmClashL { 50% { transform: translateX(6px); } }
+@keyframes hmClashR { 50% { transform: translateX(-6px); } }
+.hm-cup { position: absolute; z-index: 2; left: 50%; top: 18px; width: 64px; margin-left: -32px; filter: drop-shadow(0 0 18px rgba(243, 214, 138, .7)); animation: hmTrophy 2.4s ease-in-out infinite; }
 @keyframes hmTrophy { 50% { transform: translateY(-6px); } }
+.hm-vs { position: absolute; z-index: 2; left: 50%; bottom: 16px; transform: translateX(-50%); font-size: 22px; font-weight: 900; font-style: italic; color: #fff; text-shadow: 0 0 12px rgba(243, 214, 138, .8), 0 2px 0 #14173f; }
 
-/* ───────── Ranqueada / emblemas ───────── */
+/* ───────── Ranqueada: escalada de elos ───────── */
 .hm-ranked {
   position: relative; overflow: hidden; border-radius: 2rem; color: #fff;
-  background: radial-gradient(80% 120% at 50% 0%, #34389a 0%, #1c2058 55%, #14173f 100%);
+  background: radial-gradient(80% 120% at 50% 0%, #2c2f80 0%, #171a4a 55%, #0f1235 100%);
   box-shadow: inset 0 0 0 1px rgba(232, 229, 255, .12);
 }
-.hm-emblems { perspective: 800px; }
-.hm-emblem { transition: transform .35s cubic-bezier(.2, .8, .2, 1), filter .35s ease; transform-style: preserve-3d; }
-.hm-emblem:hover { transform: translateY(-8px) rotateY(18deg) scale(1.08); filter: drop-shadow(0 12px 18px rgba(0, 0, 0, .45)); }
-.hm-emblem svg { animation: hmBob 4s ease-in-out infinite; animation-delay: var(--delay, 0s); }
-@keyframes hmBob { 50% { transform: translateY(-4px); } }
+.hm-climb { display: grid; gap: 14px; }
+.hm-climb-stage { position: relative; display: grid; justify-items: center; align-content: start; min-height: 260px; }
+.hm-climb-glow { position: absolute; left: 50%; top: 90px; width: 260px; height: 260px; margin: -130px 0 0 -130px; border-radius: 50%; background: radial-gradient(circle, color-mix(in srgb, var(--tc) 55%, transparent), transparent 65%); transition: background .6s; }
+.hm-climb-emblem { position: relative; width: min(230px, 62vw); height: 180px; object-fit: contain; animation: hmEmblemIn .6s cubic-bezier(.2, .8, .2, 1) both; user-select: none; }
+@keyframes hmEmblemIn { from { opacity: 0; transform: scale(.7) translateY(10px); filter: brightness(2); } to { opacity: 1; transform: none; filter: none; } }
+.hm-climb-name { position: relative; font-size: 1.6rem; font-weight: 900; text-transform: uppercase; letter-spacing: .12em; color: var(--tc); text-shadow: 0 2px 18px color-mix(in srgb, var(--tc) 60%, transparent); animation: hmPlate .45s both; }
+.hm-climb-blurb { position: relative; font-size: .9rem; color: #d9d5f7; animation: hmPlate .45s .05s both; }
+.hm-climb-row { display: grid; grid-template-columns: repeat(10, minmax(0, 1fr)); gap: 4px; }
+.hm-climb-row button { display: grid; place-items: center; width: 100%; aspect-ratio: 1; border-radius: 10px; opacity: .45; filter: grayscale(.7); transition: opacity .2s, filter .2s, transform .2s, background .2s; }
+.hm-climb-row button.past { opacity: .8; filter: none; }
+.hm-climb-row button.on { opacity: 1; filter: none; transform: translateY(-3px) scale(1.12); background: rgba(232, 229, 255, .08); }
+.hm-climb-row img { width: 92%; height: 92%; object-fit: contain; }
 
 /* ───────── Ranking ───────── */
 .hm-rank-row { transition: background .15s ease, transform .15s ease; }
@@ -233,22 +248,40 @@
 .hm-medal-1 { background: linear-gradient(180deg, #f6dc94, #c99a3a); color: #3a2a06; }
 .hm-medal-2 { background: linear-gradient(180deg, #f1f0fa, #a9a6c4); color: #2b2a40; }
 .hm-medal-3 { background: linear-gradient(180deg, #f0c2a0, #a8643c); color: #3a1c08; }
-
-/* ───────── Por que criar conta ───────── */
-.hm-perk { transition: transform .2s ease, border-color .2s ease; }
-.hm-perk:hover { transform: translateY(-3px); border-color: var(--color-accent2); }
-.hm-perk-ico {
-  display: grid; place-items: center; width: 44px; height: 44px; border-radius: 12px; color: #fff;
-  background: linear-gradient(160deg, #6d63db, #262a72); box-shadow: inset 0 0 0 1px rgba(255, 255, 255, .2), 0 6px 14px -6px rgba(38, 42, 114, .6);
+.hm-rank-flash { animation: hmFlash 2.4s ease-out; }
+@keyframes hmFlash { 0%, 30% { background: rgba(243, 214, 138, .35); } 100% { background: transparent; } }
+.hm-live {
+  margin: -14px 0 8px; display: inline-flex; align-items: center; gap: 6px;
+  font-size: 11px; font-weight: 900; letter-spacing: .14em; text-transform: uppercase; color: #d23f5c;
 }
+.hm-live i { width: 8px; height: 8px; border-radius: 50%; background: #d23f5c; animation: hmPulse 1.4s ease-out infinite; }
+@keyframes hmPulse { 0% { box-shadow: 0 0 0 0 rgba(210, 63, 92, .6); } 100% { box-shadow: 0 0 0 10px rgba(210, 63, 92, 0); } }
+
+/* ───────── Últimos campeões ───────── */
+.hm-wins { display: grid; gap: 10px; }
+.hm-win { position: relative; overflow: hidden; border-radius: 16px; background: #14173f; color: #fff; box-shadow: 0 0 0 1px rgba(200, 170, 110, .35); }
+.hm-win-bg { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; object-position: 70% 20%; opacity: .45; }
+.hm-win::after { content: ""; position: absolute; inset: 0; background: linear-gradient(90deg, #14173f 25%, rgba(20, 23, 63, .55)); }
+.hm-win-in { position: relative; z-index: 1; display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 10px; padding: 12px 14px; }
+.hm-win-who { display: flex; align-items: center; gap: 10px; min-width: 0; }
+.hm-win-who img { width: 36px; height: 36px; border-radius: 50%; box-shadow: 0 0 0 2px #c8aa6e; }
+.hm-win-who b { display: block; font-weight: 900; }
+.hm-win-who small { display: block; font-size: 11px; color: #c9c3f5; }
+.hm-win-team { display: flex; gap: 4px; }
+.hm-win-team span { display: grid; justify-items: center; gap: 1px; }
+.hm-win-team img { width: 34px; height: 34px; border-radius: 7px; box-shadow: 0 0 0 1px rgba(232, 229, 255, .3); }
+.hm-win-team small { font-size: 9px; font-weight: 800; color: #f3d68a; }
+.hm-wins-empty { display: grid; place-items: center; gap: 4px; padding: 40px 16px; border-radius: 16px; text-align: center; border: 1px dashed var(--color-line); color: var(--color-muted); }
+.hm-wins-empty p { font-weight: 900; color: var(--color-gold2); }
+
+/* Página /ranking: fileira de elos */
+.hm-emblems { perspective: 800px; }
+.hm-emblem { transition: transform .35s cubic-bezier(.2, .8, .2, 1), filter .35s ease; }
+.hm-emblem:hover { transform: translateY(-6px) scale(1.1); filter: drop-shadow(0 12px 18px rgba(0, 0, 0, .35)); }
 
 @media (prefers-reduced-motion: reduce) {
-  .hm-ring { animation: none; transform: rotateY(-18deg); }
-  .hm-tilt { transition: none; }
-  .hm-walker { animation: none; transform: translateX(var(--still, 40px)); }
-  .hm-moon, .hm-moon-glow, .hm-cta::before, .hm-hop, .hm-scene-stars, .hm-river::after,
-  .hm-emblem svg, .hm-trophy, .hm-clash-l, .hm-clash-r { animation: none; }
-  .hm-bid, .hm-slot, .hm-coin, .hm-spark, .hm-reveal { animation: none; opacity: 1; }
-  .hm-bid:not(:last-of-type) { opacity: 0; }
+  .hm-moon, .hm-moon-glow, .hm-cta::before, .hm-cup, .hm-vs-side, .hm-bidcard, .hm-climb-emblem, .hm-live i { animation: none; }
+  .hm-bid, .hm-slot, .hm-reveal { animation: none; opacity: 1; }
+  .hm-bid:not(:first-child) { opacity: 0; }
   .hm-timer { animation: none; transform: scaleX(.6); }
 }
