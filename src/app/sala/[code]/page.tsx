@@ -1,6 +1,7 @@
 import type { Metadata } from 'next';
 import Link from 'next/link';
 import { notFound, redirect } from 'next/navigation';
+import { headers } from 'next/headers';
 import { createClient, getCurrentUser } from '@/lib/supabase/server';
 import { normalizeCode } from '@/lib/rooms/service';
 import { type AuctionRow, type MemberRow, type RoomRow, seatPlayerId } from '@/lib/rooms/types';
@@ -52,6 +53,8 @@ export default async function SalaPage({ params }: Params) {
 
   const { data: auction } = await supabase.from('auctions')
     .select('id, room_id, state, tournament, version, next_tick_at').eq('room_id', room.id).maybeSingle<Omit<AuctionRow, 'bot_brains'>>();
+  const hdr = await headers();
+  console.log('[sala]', hdr.get('rsc') ? 'RSC' : 'DOC', hdr.get('next-action') ? 'ACTION' : '', hdr.get('referer')?.slice(-30) ?? '', code, room.status, 'auction?', !!auction, 'phase', auction?.state?.phase, 'seat', me?.seat ?? null);
   if (!auction) {
     return <Message title="Draft em andamento" text="Esse draft já começou e você não está nesta sala." />;
   }

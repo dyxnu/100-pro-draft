@@ -8,7 +8,7 @@ import {
 } from '@/lib/match/map';
 import type { MatchResult, PlayerKey } from '@/lib/match/sim';
 import { ROLE_LABEL } from '@/components/draft/ui';
-import { ALL_KEYS, buildDeaths, isDeadAt, targetPosition } from './positions';
+import { ALL_KEYS, buildDeaths, buildPaths, isDeadAt, positionAt } from './positions';
 import './match.css';
 
 export interface ViewerSide {
@@ -21,7 +21,6 @@ export interface ViewerSide {
 const DDRAGON = '14.23.1';
 const icon = (id: string) => `https://ddragon.leagueoflegends.com/cdn/${DDRAGON}/img/champion/${id}.png`;
 const fmt = (t: number) => `${Math.floor(t / 60)}:${String(Math.floor(t % 60)).padStart(2, '0')}`;
-const MOVE_SPEED = 0.55; // unidades do mapa por segundo de jogo
 
 /**
  * Mini-mapa animado. Sem `syncStart`, o jogador controla play/pausa/velocidade.
@@ -44,7 +43,9 @@ export function MatchViewer({ result, sides, syncStart, syncSpeed = 20, serverNo
   const [, force] = useState(0);
   const deaths = useMemo(() => buildDeaths(result.events), [result]);
   const end = result.duration;
-  const splitTop: [boolean, boolean] = [!!sides[0].splitpush, !!sides[1].splitpush];
+  const splitA = !!sides[0].splitpush, splitB = !!sides[1].splitpush;
+  // Trajeto completo de cada campeão (calculado uma vez por partida).
+  const paths = useMemo(() => buildPaths(result.events, deaths, [splitA, splitB], result.duration), [result, deaths, splitA, splitB]);
 
   useEffect(() => {
     let raf = 0;
@@ -56,17 +57,8 @@ export function MatchViewer({ result, sides, syncStart, syncSpeed = 20, serverNo
       if (synced) gt = Math.max(0, ((serverNow!() - syncStart!) / 1000) * syncSpeed);
       else if (playing) gt += dt * speed;
       gt = Math.min(end, gt);
-      const step = Math.max(gt - tRef.current, 0);
       tRef.current = gt;
-      for (const k of ALL_KEYS) {
-        const target = targetPosition(k, gt, result.events, deaths, splitTop).at;
-        const cur = pos.current[k];
-        if (!cur || step > 30 || isDeadAt(deaths, k, gt)) { pos.current[k] = target; continue; }
-        const dx = target.x - cur.x, dy = target.y - cur.y;
-        const dist = Math.hypot(dx, dy);
-        const max = MOVE_SPEED * Math.max(step, dt * 4) + 0.02;
-        pos.current[k] = dist <= max ? target : { x: cur.x + (dx / dist) * max, y: cur.y + (dy / dist) * max };
-      }
+      for (const k of ALL_KEYS) pos.current[k] = positionAt(paths, k, gt);
       setT(gt);
       force(x => x + 1);
       raf = requestAnimationFrame(loop);
@@ -74,7 +66,7 @@ export function MatchViewer({ result, sides, syncStart, syncSpeed = 20, serverNo
     raf = requestAnimationFrame(loop);
     return () => cancelAnimationFrame(raf);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [playing, speed, synced, syncStart, syncSpeed, result, end]);
+  }, [playing, speed, synced, syncStart, syncSpeed, result, end, paths]);
 
   const past = result.events.filter(e => e.t <= t);
   const score = past.length ? past[past.length - 1].score : [0, 0];
