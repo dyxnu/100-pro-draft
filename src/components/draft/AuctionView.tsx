@@ -81,6 +81,16 @@ export function AuctionView({ code, roomId, initialState, initialTournament, ini
         setSnap(prev => (versionOf(p.state, p.tournament) >= versionOf(prev.state, prev.tournament)
           ? { state: p.state, tournament: p.tournament ?? prev.tournament, nextTickAt: p.nextTickAt } : prev));
       })
+      // Mais rápido ainda: a intenção de lance/passe chega antes da confirmação do servidor.
+      .on('broadcast', { event: 'intent' }, (msg: { payload: { kind: 'bid' | 'pass'; playerId: string; amount?: number; at: number } }) => {
+        const p = msg.payload;
+        if (!p?.playerId) return;
+        setSnap(prev => {
+          const next = structuredClone(prev.state);
+          const r = p.kind === 'bid' ? placeBid(next, p.playerId, p.amount ?? 0, p.at) : passLot(next, p.playerId, p.at);
+          return r.ok ? { ...prev, state: next } : prev;
+        });
+      })
       .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'auctions', filter: `room_id=eq.${roomId}` }, (p: { new: unknown }) => {
         // Colunas grandes que não mudaram podem vir vazias na mensagem: aproveita o que já temos.
         const row = p.new as { state?: AuctionState | null; tournament?: TournamentState | null; next_tick_at?: string | null };
@@ -117,6 +127,8 @@ export function AuctionView({ code, roomId, initialState, initialTournament, ini
     // Lance e passe aparecem na hora (aplicados localmente com o mesmo motor do servidor);
     // a resposta do servidor confirma ou corrige logo em seguida.
     if (me && (action.type === 'bid' || action.type === 'pass')) {
+      const at = serverTime();
+      void live.current?.send({ type: 'broadcast', event: 'intent', payload: { kind: action.type, playerId: me, amount: action.type === 'bid' ? action.amount : undefined, at } });
       setSnap(prev => {
         const next = structuredClone(prev.state);
         const r = action.type === 'bid' ? placeBid(next, me, action.amount, serverTime()) : passLot(next, me, serverTime());

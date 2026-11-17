@@ -59,8 +59,7 @@ export default async function DemoPage({ searchParams }: { searchParams: Promise
           <p className="eyebrow">Simulador · demonstração</p>
           <h1 className="mt-1 text-2xl font-bold text-gold2">Time Azul x Time Vermelho</h1>
           <p className="mt-1 text-sm text-muted">
-            Chance prevista do Azul: <b className="text-text">{Math.round(result.preMatchWinChanceA * 100)}%</b>
-            {' '}· Estratégia Azul: {label(a)} · Vermelho: {label(b)}
+            Estratégia Azul: {label(a)} · Vermelho: {label(b)}
           </p>
         </div>
         <Link href={`/partida/demo?seed=${seed + 1}`} className="btn-secondary">Outra partida</Link>

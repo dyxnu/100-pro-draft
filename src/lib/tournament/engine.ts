@@ -41,7 +41,7 @@ export interface TournamentConfig {
 }
 
 export const DEFAULT_TOURNAMENT_CONFIG: TournamentConfig = {
-  lineupMs: 45_000, speed: 30, kickoffMs: 3_000, resultPauseMs: 8_000, maxChangesPerMatch: 6,
+  lineupMs: 30_000, speed: 45, kickoffMs: 3_000, resultPauseMs: 6_000, maxChangesPerMatch: 6,
 };
 
 export interface TournamentState {

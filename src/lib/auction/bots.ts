@@ -6,10 +6,10 @@ import {
 } from './engine';
 
 export const BOT_PROFILES: Record<BotProfile, { label: string; mult: number; jump: number; prefMult?: number }> = {
-  economico: { label: 'Econômico', mult: 0.65, jump: 0.0 },
-  equilibrado: { label: 'Equilibrado', mult: 1.0, jump: 0.1 },
-  agressivo: { label: 'Agressivo', mult: 1.45, jump: 0.35 },
-  estrategico: { label: 'Estratégico', mult: 0.8, jump: 0.15, prefMult: 2.0 },
+  economico: { label: 'Econômico', mult: 0.6, jump: 0.0 },
+  equilibrado: { label: 'Equilibrado', mult: 0.85, jump: 0.08 },
+  agressivo: { label: 'Agressivo', mult: 1.2, jump: 0.25 },
+  estrategico: { label: 'Estratégico', mult: 0.7, jump: 0.12, prefMult: 1.7 },
 };
 
 const TIER_FACTOR = { 1: 0.6, 2: 1.0, 3: 1.5 } as const;
@@ -41,7 +41,12 @@ function valuation(s: AuctionState, p: Player, brain: BotBrain): number {
   const avgPerSlot = p.budget / openRoles(p).length;
   let mult = prof.mult;
   if (prof.prefMult && champ.routes.includes(brain.prefRole) && !p.roster[brain.prefRole]) mult = prof.prefMult;
-  const v = avgPerSlot * mult * TIER_FACTOR[champ.tier] * brain.noise;
+  // Paciência: com muitos lotes ainda por vir para poucas vagas, o bot segura o dinheiro.
+  const lotsLeft = Math.max(1, s.totalLots - (s.current!.index - 1));
+  const openAll = s.players.reduce((n, q) => n + openRoles(q).length, 0);
+  const scarcity = openAll / lotsLeft;                        // ~0.83 no começo; perto de 1 = acabando
+  const patience = Math.max(0.75, Math.min(1.15, 0.3 + scarcity * 0.7));
+  const v = avgPerSlot * mult * TIER_FACTOR[champ.tier] * brain.noise * patience;
   const unit = s.config.minIncrement;
   return Math.min(Math.floor(v / unit) * unit, maxBid(s, p.id));
 }
@@ -70,7 +75,14 @@ export function stepBots(s: AuctionState, brains: BotBrains, now: number): void 
     if (s.phase !== 'bidding' || !s.current) { b.nextAt = null; continue; }
 
     const key = `${s.current.champId}@${s.current.startedAt}`;
-    if (b.lotKey !== key) { b.lotKey = key; b.noise = 0.8 + rand() * 0.4; b.seen = -1; }
+    if (b.lotKey !== key) {
+      b.lotKey = key; b.noise = 0.8 + rand() * 0.4; b.seen = -1;
+      // Sem pressa e fora da rota preferida: às vezes nem disputa (deixa o lote para os outros).
+      const champ = s.champions[s.current.champId];
+      const lotsLeft = s.totalLots - (s.current.index - 1);
+      const relaxed = s.players.reduce((n, q) => n + openRoles(q).length, 0) * 1.15 < lotsLeft;
+      if (relaxed && !champ.routes.includes(b.prefRole) && rand() < 0.3) b.noise = 0.35;
+    }
     if (b.seen !== s.seq) {
       b.seen = s.seq;
       // Reage em um momento aleatório antes do relógio acabar.

@@ -103,7 +103,10 @@ export function buildPaths(events: MatchEvent[], deaths: Record<string, Deaths[]
       };
       if (t < 14 * 60) {
         const lane = ROLE_LANE[role];
-        return lane ? add(laneFront(lane), j, 0.7) : sample(jungle[side], t);
+        if (!lane) return sample(jungle[side], t);
+        // Na rota ninguém fica parado: vai e volta trocando golpes e farmando.
+        const ph = ROLES.indexOf(role) * 1.7 + side * 2.3;
+        return { x: laneFront(lane).x + j.x * 0.7 + Math.sin(t / 5 + ph) * 1.3, y: laneFront(lane).y + j.y * 0.7 + Math.cos(t / 7 + ph) * 1.1 };
       }
       if (role === 'TOP' && splitTop[side]) return add(laneFront('TOP'), j, 0.5);
       const next = events.find(e => e.t >= t && (e.type === 'teamfight' || e.type === 'baron' || e.type === 'dragon'));

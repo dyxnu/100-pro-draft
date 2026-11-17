@@ -8,7 +8,8 @@ import {
 } from '@/lib/match/map';
 import type { MatchResult, PlayerKey } from '@/lib/match/sim';
 import { ROLE_LABEL } from '@/components/draft/ui';
-import { ALL_KEYS, buildDeaths, buildPaths, isDeadAt, positionAt } from './positions';
+import { ALL_KEYS, buildDeaths, buildPaths, isDeadAt, positionAt, towersLostAt } from './positions';
+import { alongLane } from '@/lib/match/map';
 import { play } from '@/lib/sound';
 import './match.css';
 
@@ -19,7 +20,7 @@ export interface ViewerSide {
   splitpush?: boolean;
 }
 
-const DDRAGON = '14.23.1';
+const DDRAGON = '16.22.1';
 const icon = (id: string) => `https://ddragon.leagueoflegends.com/cdn/${DDRAGON}/img/champion/${id}.png`;
 const fmt = (t: number) => `${Math.floor(t / 60)}:${String(Math.floor(t % 60)).padStart(2, '0')}`;
 
@@ -91,7 +92,15 @@ export function MatchViewer({ result, sides, syncStart, syncSpeed = 20, serverNo
   const inhibDown = (s: Side, lane: Lane) => past.some(e => e.type === 'inhibitor' && e.side !== s && e.lane === lane);
   const nexusTowersDown = (s: Side) => past.filter(e => e.type === 'nexus_tower' && e.side !== s).length;
   const count = (s: Side, type: string) => past.filter(e => e.type === type && e.side === s).length;
-  const flashes = result.events.filter(e => e.t <= t && t - e.t < 4 && e.type !== 'tactic' && (e.big || e.type !== 'tower'));
+  // Efeitos medidos em segundos REAIS (a partida corre dezenas de vezes mais rápido que o normal).
+  const rate = synced ? syncSpeed : speed;
+  const fx = (sec: number) => sec * rate; // segundos reais -> segundos de jogo
+  const flashes = result.events.filter(e => e.t <= t && t - e.t < fx(1.2) && e.type !== 'tactic' && (e.big || e.type !== 'tower'));
+  const marks = result.events.filter(e => e.t <= t && t - e.t < fx(2.5) && e.victims.length > 0 && e.type !== 'tactic');
+  const banner = [...result.events].reverse().find(e => e.t <= t && t - e.t < fx(2.2) && e.big && e.type !== 'tactic');
+  const waves = minionWaves(result.events, t);
+  const winA = liveWinChance(past);
+  const dragonBack = respawnLeft(past, 'dragon', 300, t), baronBack = respawnLeft(past, 'baron', 360, t);
   const finished = t >= end;
   const nameOf = (k: PlayerKey) => sides[Number(k[0])].champs[k.slice(2) as Role].name;
 
@@ -101,6 +110,12 @@ export function MatchViewer({ result, sides, syncStart, syncSpeed = 20, serverNo
         <TeamScore side={sides[0]} kills={score[0]} towers={count(0, 'tower')} dragons={count(0, 'dragon')} barons={count(0, 'baron')} />
         <div className="clock">{fmt(t)}</div>
         <TeamScore side={sides[1]} kills={score[1]} towers={count(1, 'tower')} dragons={count(1, 'dragon')} barons={count(1, 'baron')} right />
+      </div>
+      {/* Chance de vitória AO VIVO: muda com abates, torres, dragões e Barão */}
+      <div className="nx-winbar" title="Chance de vitória ao vivo">
+        <span style={{ width: `${winA * 100}%`, background: sides[0].color }} />
+        <span style={{ width: `${(1 - winA) * 100}%`, background: sides[1].color }} />
+        <b className="l">{Math.round(winA * 100)}%</b><b className="r">{Math.round((1 - winA) * 100)}%</b>
       </div>
 
       <div className="nx-match-body">
@@ -115,8 +130,14 @@ export function MatchViewer({ result, sides, syncStart, syncSpeed = 20, serverNo
             <image href={MINIMAP_URL} x="0" y="0" width="100" height="100" preserveAspectRatio="none" />
             <rect width="100" height="100" fill="#000" opacity=".12" />
             {/* Barão e dragão: brilham quando estão vivos no mapa */}
-            <EpicMarker at={BARON_PIT} color="#b07cff" alive={!past.some(e => e.type === 'baron' && t - e.t < 360)} />
-            <EpicMarker at={DRAGON_PIT} color="#ff9f43" alive={!past.some(e => e.type === 'dragon' && t - e.t < 300)} />
+            <EpicMarker at={BARON_PIT} color="#b07cff" alive={baronBack == null && t >= 20 * 60} back={baronBack ?? (t < 20 * 60 ? 20 * 60 - t : null)} />
+            <EpicMarker at={DRAGON_PIT} color="#ff9f43" alive={dragonBack == null && t >= 5 * 60} back={dragonBack ?? (t < 5 * 60 ? 5 * 60 - t : null)} />
+            {/* Ondas de tropas andando pelas rotas */}
+            {waves.map(w => (
+              <g key={w.key} opacity={w.alpha}>
+                {[-0.9, 0, 0.9].map(d => <circle key={d} cx={w.at.x + d * w.nx} cy={w.at.y + d * w.ny} r=".55" fill={sides[w.side].color} stroke="#0b0f14" strokeWidth=".15" />)}
+              </g>
+            ))}
             {([0, 1] as Side[]).map(s => (
               <g key={s}>
                 {LANES.map(l => [0, 1, 2].map(tier => (
@@ -132,9 +153,21 @@ export function MatchViewer({ result, sides, syncStart, syncSpeed = 20, serverNo
                   fill={finished && result.winner !== s ? '#2a2a2a' : sides[s].color} stroke="#0b0f14" strokeWidth=".5" />
               </g>
             ))}
-            {flashes.map((e, i) => (
-              <circle key={i} cx={e.at.x} cy={e.at.y} r={2 + (t - e.t) * 1.6} fill="none" stroke={sides[e.side].color} strokeWidth=".5" opacity={Math.max(0, 1 - (t - e.t) / 4)} />
-            ))}
+            {flashes.map((e, i) => {
+              const k = (t - e.t) / fx(1.2);
+              return <circle key={i} cx={e.at.x} cy={e.at.y} r={2 + k * 7} fill="none" stroke={sides[e.side].color} strokeWidth=".6" opacity={Math.max(0, 1 - k)} />;
+            })}
+            {/* Marcas de abate no local da morte */}
+            {marks.flatMap((e, i) => e.victims.map((v, j) => {
+              const k = (t - e.t) / fx(2.5);
+              const vs = Number(v[0]) as Side;
+              return (
+                <g key={`m${i}-${j}`} transform={`translate(${e.at.x + (j - (e.victims.length - 1) / 2) * 2.6} ${e.at.y - 3.4})`} opacity={Math.max(0, 1 - k * k)}>
+                  <circle r="1.5" fill="#0b0f14" stroke={sides[vs].color} strokeWidth=".3" />
+                  <text textAnchor="middle" dy=".55" fontSize="1.7" fill="#fff">✕</text>
+                </g>
+              );
+            }))}
             {ALL_KEYS.map(k => {
               const p = pos.current[k];
               if (!p) return null;
@@ -151,6 +184,7 @@ export function MatchViewer({ result, sides, syncStart, syncSpeed = 20, serverNo
               );
             })}
           </svg>
+          {banner && !finished && <div key={`${banner.t}-${banner.type}`} className="nx-banner" style={{ borderColor: sides[banner.side].color }}>{bannerText(banner, sides)}</div>}
           {finished && (
             <div className="nx-result">
               <p className="small">Vitória</p>
@@ -195,13 +229,81 @@ function Turret({ at, color, down }: { at: Pt; color: string; down: boolean }) {
   );
 }
 
-function EpicMarker({ at, color, alive }: { at: Pt; color: string; alive: boolean }) {
+function EpicMarker({ at, color, alive, back }: { at: Pt; color: string; alive: boolean; back: number | null }) {
   return (
-    <g transform={`translate(${at.x} ${at.y})`} opacity={alive ? 1 : 0.25}>
+    <g transform={`translate(${at.x} ${at.y})`}>
       {alive && <circle r="3" fill={color} opacity=".18" className="epic-glow" />}
-      <circle r="1.3" fill="#0b0f14" stroke={color} strokeWidth=".5" />
+      <circle r="1.3" fill="#0b0f14" stroke={color} strokeWidth=".5" opacity={alive ? 1 : 0.45} />
+      {!alive && back != null && back > 0 && (
+        <text y="-2.2" textAnchor="middle" fontSize="2" fontWeight="800" fill="#fff" stroke="#0b0f14" strokeWidth=".35" paintOrder="stroke">{fmt(back)}</text>
+      )}
     </g>
   );
+}
+
+/** Tropas: uma onda por rota e lado a cada 30 s (a partir de 1:05), andando até a frente da rota. */
+function minionWaves(events: MatchResult['events'], t: number) {
+  const out: { key: string; side: Side; at: Pt; nx: number; ny: number; alpha: number }[] = [];
+  if (t < 65) return out;
+  const lost = towersLostAt(events, t);
+  const SPEED = 0.022; // fração da rota por segundo de jogo
+  const last = Math.floor((t - 65) / 30);
+  for (const lane of LANES) {
+    const front = Math.max(0.12, Math.min(0.88, 0.5 + (lost[1][lane] - lost[0][lane]) * 0.11));
+    for (const side of [0, 1] as Side[]) {
+      for (let k = last; k >= 0 && k >= last - 2; k--) {
+        const age = t - (65 + k * 30);
+        const start = side === 0 ? 0.1 : 0.9, dir = side === 0 ? 1 : -1;
+        let f = start + dir * SPEED * age;
+        const reached = side === 0 ? f >= front : f <= front;
+        if (reached) f = front + (side === 0 ? -0.015 : 0.015);
+        const travel = Math.abs(front - start) / SPEED;
+        const alpha = reached ? Math.max(0, 1 - (age - travel) / 14) : 1;
+        if (alpha <= 0) continue;
+        const p = alongLane(lane, f), q = alongLane(lane, f + 0.01);
+        const len = Math.hypot(q.x - p.x, q.y - p.y) || 1;
+        // perpendicular à rota, para as 3 tropas ficarem lado a lado
+        out.push({ key: `${lane}${side}${k}`, side, at: p, nx: -(q.y - p.y) / len, ny: (q.x - p.x) / len, alpha });
+      }
+    }
+  }
+  return out;
+}
+
+/** Chance de vitória ao vivo do lado azul (0–1), pelo que aconteceu na partida até agora. */
+function liveWinChance(past: MatchResult['events']): number {
+  let x = 0;
+  for (const e of past) {
+    const sg = e.side === 0 ? 1 : -1;
+    if (e.type === 'kill' || e.type === 'gank') x += 0.12 * sg * Math.max(1, e.victims.length);
+    else if (e.type === 'teamfight') x += 0.12 * sg * e.victims.length + 0.15 * sg;
+    else if (e.type === 'tower') x += 0.3 * sg;
+    else if (e.type === 'dragon') x += 0.22 * sg;
+    else if (e.type === 'baron') x += 0.7 * sg;
+    else if (e.type === 'inhibitor') x += 0.6 * sg;
+    else if (e.type === 'nexus_tower') x += 0.8 * sg;
+    else if (e.type === 'nexus') x += 50 * sg;
+  }
+  return 1 / (1 + Math.exp(-x));
+}
+
+/** Segundos até o objetivo voltar (null se está vivo). */
+function respawnLeft(past: MatchResult['events'], type: 'dragon' | 'baron', every: number, t: number): number | null {
+  const last = [...past].reverse().find(e => e.type === type);
+  if (!last) return null;
+  const left = last.t + every - t;
+  return left > 0 ? left : null;
+}
+
+function bannerText(e: MatchResult['events'][number], sides: [ViewerSide, ViewerSide]) {
+  const team = sides[e.side].name;
+  if (e.type === 'baron') return `${team} pega o BARÃO`;
+  if (e.type === 'dragon') return e.text.includes('ALMA') ? `${team} conquista a ALMA DO DRAGÃO` : `${team} pega o Dragão`;
+  if (e.type === 'inhibitor') return `${team} derruba um inibidor`;
+  if (e.type === 'nexus') return `VITÓRIA de ${team}!`;
+  if (e.type === 'teamfight') return `Team fight: vitória de ${team}`;
+  if (e.text.includes('FIRST BLOOD')) return 'FIRST BLOOD!';
+  return e.text.replace(/^\d+:\d{2} · /, '');
 }
 
 function TeamScore({ side, kills, towers, dragons, barons, right }: {

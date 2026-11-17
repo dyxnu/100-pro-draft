@@ -53,3 +53,13 @@
 .nx-feed li { animation: fadeUp .3s ease-out both; }
 .nx-result h3 { animation: bump .6s ease-out; }
 .nx-board tr.mvp td { color: var(--color-accent); }
+
+/* chance de vitória ao vivo */
+.nx-winbar { position: relative; display: flex; height: 18px; margin: 8px 0 10px; border-radius: 999px; overflow: hidden; background: #ddd; }
+.nx-winbar span { height: 100%; transition: width .6s ease; }
+.nx-winbar b { position: absolute; top: 0; line-height: 18px; font-size: 11px; font-weight: 900; color: #fff; text-shadow: 0 1px 2px rgba(0, 0, 0, .6); }
+.nx-winbar .l { left: 10px; }
+.nx-winbar .r { right: 10px; }
+/* faixa de lance importante sobre o mapa */
+.nx-map-wrap { position: relative; }
+.nx-banner { position: absolute; top: 10px; left: 50%; transform: translateX(-50%); padding: 6px 16px; border-radius: 12px; border: 2px solid; background: rgba(11, 15, 20, .85); color: #fff; font-weight: 900; font-size: 15px; letter-spacing: .03em; white-space: nowrap; animation: lotReveal .3s ease-out both; pointer-events: none; }
