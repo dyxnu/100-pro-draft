@@ -6,6 +6,7 @@ import {
 import { createBrains, nextBotAction, stepBots } from './bots';
 import { STARTER_CHAMPIONS } from './champions';
 import { advance, nextWake } from './runner';
+import { SKINS } from '@/lib/store/catalog';
 
 const PROFILES = ['agressivo', 'economico', 'equilibrado', 'estrategico', 'equilibrado', 'agressivo'] as const;
 
@@ -149,5 +150,59 @@ describe('drafts completos', () => {
 
   it('é determinístico pela seed', () => {
     expect(simulate(true, 42).s.sales).toEqual(simulate(true, 42).s.sales);
+  });
+});
+
+describe('skins nos lotes (5%)', () => {
+  it('cerca de 5% dos lotes (de campeões com skin) vêm com uma skin válida', () => {
+    let lots = 0, withSkin = 0;
+    for (let seed = 1; seed <= 150; seed++) {
+      const s = newGame(false, seed);
+      let now = 0;
+      let lastIndex = 0;
+      for (let i = 0; i < 10_000 && s.phase !== 'finished'; i++) {
+        tick(s, now);
+        const cur = s.current;
+        if (cur && cur.index !== lastIndex) {
+          lastIndex = cur.index;
+          if (SKINS[cur.champId]?.some(x => x.num > 0)) {
+            lots++;
+            if (cur.skin != null) {
+              withSkin++;
+              expect(cur.skin).toBeGreaterThan(0);
+              expect(SKINS[cur.champId].map(x => x.num)).toContain(cur.skin);
+            }
+          }
+        }
+        now = Math.max(now + 1, nextDeadline(s) ?? now + 1);
+      }
+    }
+    const rate = withSkin / lots;
+    expect(lots).toBeGreaterThan(3000);
+    expect(rate).toBeGreaterThan(0.03);
+    expect(rate).toBeLessThan(0.07);
+  });
+
+  it('a skin do lote passa para o roster e para a venda', () => {
+    for (let seed = 1; seed <= 400; seed++) {
+      const s = newGame(false, seed);
+      let now = 0;
+      tick(s, now);
+      // anda até o primeiro lote com skin
+      while (s.phase !== 'finished' && s.current?.skin == null) {
+        now = Math.max(now + 1, nextDeadline(s) ?? now + 1);
+        tick(s, now);
+      }
+      if (!s.current || s.current.skin == null) continue;
+      const { champId, skin } = s.current;
+      expect(placeBid(s, 'p0', 100, now).ok).toBe(true);
+      tick(s, s.current.endsAt);
+      if (s.phase === 'routePick') tick(s, s.routePick!.deadline);
+      const slot = ROLES.map(r => getPlayer(s, 'p0')!.roster[r]).find(x => x?.champId === champId);
+      expect(slot?.skin).toBe(skin);
+      expect(s.sales.find(x => x.champId === champId)?.skin).toBe(skin);
+      return;
+    }
+    throw new Error('nenhum lote com skin em 400 seeds');
   });
 });
