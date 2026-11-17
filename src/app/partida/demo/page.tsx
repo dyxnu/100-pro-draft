@@ -5,6 +5,7 @@ import { getCatalog } from '@/lib/champions/catalog';
 import { buildCard, type ChampionCard } from '@/lib/champions/cards';
 import { STRATEGY_OPTIONS, type Strategy } from '@/lib/match/model';
 import { type MatchTeam, simulateMatch } from '@/lib/match/sim';
+import { type VictoryFx, isVictoryFx } from '@/components/match/victory-fx';
 import { MatchViewer, type ViewerSide } from '@/components/match/MatchViewer';
 
 export const metadata: Metadata = { title: 'Partida de demonstração' };
@@ -22,8 +23,11 @@ function rng(seed: number) {
   };
 }
 
-export default async function DemoPage({ searchParams }: { searchParams: Promise<{ seed?: string }> }) {
-  const seed = Number((await searchParams).seed) || 1 + Math.floor(Math.random() * 1e6);
+export default async function DemoPage({ searchParams }: { searchParams: Promise<{ seed?: string; fx?: string }> }) {
+  const params = await searchParams;
+  const seed = Number(params.seed) || 1 + Math.floor(Math.random() * 1e6);
+  // ?fx=confete|estrelas|moonfall|fogos para ver o efeito de vitória.
+  const fx = isVictoryFx(`victory:${params.fx}`) ? (`victory:${params.fx}` as VictoryFx) : null;
   const rand = rng(seed);
   const catalog = await getCatalog();
   const used = new Set<string>();
@@ -47,7 +51,7 @@ export default async function DemoPage({ searchParams }: { searchParams: Promise
   const b = makeTeam('Time Vermelho');
   const result = simulateMatch(a, b, seed);
   const toSide = (t: MatchTeam, color: string): ViewerSide => ({
-    name: t.name, color, splitpush: t.strategy.estilo === 'splitpush',
+    name: t.name, color, splitpush: t.strategy.estilo === 'splitpush', victoryFx: fx,
     champs: Object.fromEntries(ROLES.map(r => [r, { id: t.cards[r].id, name: t.cards[r].name }])) as ViewerSide['champs'],
   });
   const label = (t: MatchTeam) => Object.values(t.strategy).join(' · ');

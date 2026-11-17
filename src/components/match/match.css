@@ -63,3 +63,80 @@
 /* faixa de lance importante sobre o mapa */
 .nx-map-wrap { position: relative; }
 .nx-banner { position: absolute; top: 10px; left: 50%; transform: translateX(-50%); padding: 6px 16px; border-radius: 12px; border: 2px solid; background: rgba(11, 15, 20, .85); color: #fff; font-weight: 900; font-size: 15px; letter-spacing: .03em; white-space: nowrap; animation: lotReveal .3s ease-out both; pointer-events: none; }
+
+/* ---------------------------------------------------------------------------
+   Efeitos especiais do mini-mapa (durações em segundos reais)
+   --------------------------------------------------------------------------- */
+.nx-map .champ-dot { will-change: transform; }
+.nx-map .fx-ult { animation: fxUlt .9s ease-out both; }
+.nx-map .fx-rays { animation: fxRays .85s ease-out both; }
+.nx-map .fx-wave { animation: fxWave 1.1s ease-out both; }
+.nx-map .fx-flash { animation: fxFlash 1s ease-out both; }
+.nx-map .fx-boom { animation: fxBoom 1s cubic-bezier(.2, .7, .3, 1) both; }
+.nx-map .fx-debris { animation: fxDebris .9s ease-out both; }
+.nx-map .fx-smoke { animation: fxSmoke 2.2s ease-out both; }
+.nx-map .fx-mark { animation: fxMark 2.5s ease-out both; }
+@keyframes fxUlt { 0% { opacity: 0; transform: scale(.3); } 15% { opacity: 1; } 100% { opacity: 0; transform: scale(2.4); } }
+@keyframes fxRays { 0% { opacity: 0; transform: scale(.4) rotate(0); } 20% { opacity: 1; } 100% { opacity: 0; transform: scale(1.7) rotate(25deg); } }
+@keyframes fxWave { 0% { opacity: .95; transform: scale(1); } 100% { opacity: 0; transform: scale(4.5); } }
+@keyframes fxFlash { 0% { opacity: .75; transform: scale(.6); } 100% { opacity: 0; transform: scale(1.9); } }
+@keyframes fxBoom { 0% { opacity: 1; transform: scale(.15); } 35% { opacity: 1; } 100% { opacity: 0; transform: scale(1.35); } }
+@keyframes fxDebris { 0% { opacity: 1; transform: scale(.4); } 100% { opacity: 0; transform: scale(2.1); } }
+@keyframes fxSmoke { 0% { opacity: 0; transform: scale(.5); } 25% { opacity: .4; } 100% { opacity: 0; transform: scale(2.3); } }
+@keyframes fxMark { 0% { opacity: 0; transform: translateY(1px) scale(.5); } 10% { opacity: 1; transform: none; } 65% { opacity: 1; } 100% { opacity: 0; } }
+
+/* Aura do Barão (time com o bônus) e brilho da Alma do Dragão */
+.nx-map .fx-baron { opacity: .28; transform-box: fill-box; transform-origin: center; animation: fxBaron 1.5s ease-in-out infinite; }
+.nx-map .fx-soul { transform-box: fill-box; transform-origin: center; animation: fxSoul 2.2s ease-in-out infinite; filter: drop-shadow(0 0 .8px #ff9f43); }
+.nx-map .fx-soul-nexus { opacity: .25; transform-box: fill-box; transform-origin: center; animation: fxSoulNexus 2.6s ease-in-out infinite; }
+@keyframes fxBaron { 50% { opacity: .5; transform: scale(1.18); } }
+@keyframes fxSoul { 0%, 100% { opacity: .55; } 50% { opacity: 1; transform: scale(1.08); } }
+@keyframes fxSoulNexus { 50% { opacity: .5; transform: scale(1.2); } }
+.nx-buff { font-size: 11px; font-weight: 800; padding: 2px 8px; border-radius: 999px; color: #fff; white-space: nowrap; }
+.nx-buff.baron { background: #8a5cd8; box-shadow: 0 0 10px #b07cff; animation: fxChip 1.5s ease-in-out infinite; }
+.nx-buff.soul { background: #e3832b; box-shadow: 0 0 10px #ff9f43; }
+@keyframes fxChip { 50% { box-shadow: 0 0 2px #b07cff; } }
+
+/* ACE: o time inteiro caiu */
+.nx-ace {
+  position: absolute; top: 38%; left: 50%; transform: translate(-50%, -50%); text-align: center; pointer-events: none;
+  animation: fxAce 2.2s cubic-bezier(.2, .8, .3, 1) both;
+}
+.nx-ace b { display: block; font-size: clamp(42px, 11vw, 84px); font-weight: 900; letter-spacing: .08em; line-height: 1; color: currentColor;
+  text-shadow: 0 0 18px currentColor, 0 3px 0 #0b0f14, 0 0 2px #fff; -webkit-text-stroke: 2px #0b0f14; }
+.nx-ace span { display: inline-block; margin-top: 6px; padding: 4px 12px; border-radius: 10px; background: rgba(11, 15, 20, .85); color: #fff; font-weight: 800; font-size: 13px; }
+@keyframes fxAce {
+  0% { opacity: 0; transform: translate(-50%, -50%) scale(2.2); }
+  14% { opacity: 1; transform: translate(-50%, -50%) scale(.94); }
+  22% { transform: translate(-50%, -50%) scale(1); }
+  80% { opacity: 1; }
+  100% { opacity: 0; transform: translate(-50%, -50%) scale(1.06); }
+}
+
+/* Tela de vitória */
+.nx-vfx { position: absolute; inset: 0; overflow: hidden; pointer-events: none; border-radius: 12px; container-type: size; }
+.nx-vfx .glow { position: absolute; inset: 0; background: radial-gradient(circle at 50% 70%, color-mix(in srgb, var(--team) 38%, transparent), transparent 62%); animation: vfxGlow 2.6s ease-in-out infinite; }
+.nx-vfx .p { position: absolute; display: block; font-style: normal; }
+@keyframes vfxGlow { 50% { opacity: .55; } }
+/* confete */
+.victory-confete .p { top: -14px; left: var(--x); width: 7px; height: 11px; border-radius: 2px; background: var(--c); animation: vfxFall var(--s) linear var(--d) infinite both; }
+@keyframes vfxFall { 0% { transform: translate(0, 0) rotate(0); opacity: 1; } 85% { opacity: 1; } 100% { transform: translate(var(--dx), 105cqh) rotate(var(--r)); opacity: 0; } }
+/* estrelas */
+.victory-estrelas .p { left: var(--x); top: var(--y); font-size: calc(18px * var(--z)); color: var(--c); text-shadow: 0 0 8px var(--c), 0 0 2px #fff; animation: vfxTwinkle var(--s) ease-in-out var(--d) infinite both; }
+@keyframes vfxTwinkle { 0%, 100% { opacity: 0; transform: scale(.2) rotate(0); } 50% { opacity: 1; transform: scale(1) rotate(45deg); } }
+/* moonfall (Diana): luas crescentes descendo devagar, brilho prateado */
+.victory-moonfall .glow { background: radial-gradient(circle at 50% 0%, rgba(201, 195, 245, .55), transparent 60%), radial-gradient(circle at 50% 75%, color-mix(in srgb, var(--team) 30%, transparent), transparent 60%); }
+.victory-moonfall .p { top: -30px; left: var(--x); font-size: calc(26px * var(--z)); color: #eeeaff; text-shadow: 0 0 10px #c9c3f5, 0 0 22px #8f86e0; animation: vfxMoon var(--s) ease-in var(--d) infinite both; }
+@keyframes vfxMoon { 0% { transform: translateY(0) rotate(var(--r)); opacity: 0; } 15% { opacity: 1; } 100% { transform: translateY(100cqh) rotate(calc(var(--r) * -1)); opacity: 0; } }
+/* fogos */
+.victory-fogos .burst { position: absolute; left: var(--x); top: var(--y); width: 0; height: 0; }
+.victory-fogos .p { left: -2px; top: -2px; width: 4px; height: 4px; border-radius: 99px; background: var(--c); box-shadow: 0 0 6px var(--c);
+  animation: vfxSpark 1.8s cubic-bezier(.15, .7, .3, 1) var(--d) infinite both; }
+@keyframes vfxSpark { 0% { transform: rotate(var(--a)) translateY(0) scale(1.4); opacity: 1; } 70% { opacity: .9; } 100% { transform: rotate(var(--a)) translateY(-70px) scale(.4); opacity: 0; } }
+.nx-result { z-index: 1; }
+
+@media (prefers-reduced-motion: reduce) {
+  .nx-map .fx, .nx-vfx .p, .nx-vfx .burst { display: none; }
+  .nx-vfx .glow, .nx-map .fx-baron, .nx-map .fx-soul, .nx-map .fx-soul-nexus, .nx-buff.baron { animation: none; }
+  .nx-ace { animation: none; }
+}

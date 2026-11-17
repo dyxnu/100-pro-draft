@@ -4,13 +4,13 @@ import { useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
 import { ROLES, type AuctionState, type Role } from '@/lib/auction/engine';
 import type { ClientAction } from '@/lib/rooms/types';
-import { STRATEGY_OPTIONS, type Strategy, teamProfile } from '@/lib/match/model';
+import { STRATEGY_OPTIONS, type Strategy, matchupEdge, teamProfile } from '@/lib/match/model';
 import {
   type TMatch, type TeamEntry, type TournamentState,
   matchResult, matchTeam, playingMatchOf, roundMatches, teamCards, teamRating,
 } from '@/lib/tournament/engine';
 import { ChampionCard } from '@/components/cards/ChampionCard';
-import { MatchViewer, type ViewerSide } from '@/components/match/MatchViewer';
+import { MatchViewer, type VictoryFx, type ViewerSide, isVictoryFx } from '@/components/match/MatchViewer';
 import { ChampImg, ROLE_LABEL, seatColor } from '@/components/draft/ui';
 import './tournament.css';
 
@@ -19,7 +19,9 @@ const RED = '#e84057';
 const ROUND_NAME = (round: number, total: number) =>
   round === total ? 'Final' : round === total - 1 ? 'Semifinal' : round === total - 2 ? 'Quartas de final' : `Rodada ${round}`;
 
-export function TournamentView({ s, t, me, act, pending, serverTime, auctionSummary }: {
+export function TournamentView({ s, t, me, act, pending, serverTime, auctionSummary, victoryFx }: {
+  /** Efeito de vitória de cada jogador (`profiles.victory_fx`), por playerId. Opcional. */
+  victoryFx?: Record<string, string | null | undefined>;
   s: AuctionState;
   t: TournamentState;
   me: string | null;
@@ -75,7 +77,7 @@ export function TournamentView({ s, t, me, act, pending, serverTime, auctionSumm
               </div>
             </div>
           )}
-          <LiveMatch s={s} t={t} m={watched} me={me} act={act} pending={pending} serverTime={serverTime} />
+          <LiveMatch s={s} t={t} m={watched} me={me} act={act} pending={pending} serverTime={serverTime} victoryFx={victoryFx} />
         </section>
       )}
 
@@ -178,6 +180,12 @@ function LineupStage({ s, t, me, match, act, pending }: {
   const [sel, setSel] = useState<Role | null>(null);
   const cards = useMemo(() => teamCards(team, s.champions), [team, s.champions]);
   const issues = useMemo(() => teamProfile(matchTeam(team, s.champions).cards).compIssues, [team, s.champions]);
+  const oppCards = useMemo(() => teamCards(opp, s.champions), [opp, s.champions]);
+  // Confronto direto em cada rota (seu campeão contra o do adversário), só em setas: sem porcentagem.
+  const lanes = useMemo(
+    () => Object.fromEntries(ROLES.map(r => [r, laneArrow(matchupEdge(cards[r], oppCards[r], r))])) as Record<Role, ReturnType<typeof laneArrow>>,
+    [cards, oppCards],
+  );
   const playing = roundMatches(t).flatMap(m => (m.a && m.b ? [m.a, m.b] : []));
   const readyCount = playing.filter(id => t.teams[id].ready).length;
 
@@ -213,12 +221,16 @@ function LineupStage({ s, t, me, match, act, pending }: {
       <aside className="lineup-side">
         <p className="eyebrow">Próximo adversário</p>
         <h3>{opp.name} <small>#{opp.seed} · overall {teamRating(opp, s.champions)}</small></h3>
+        <p className="muted small">Setas: confronto direto do seu campeão em cada rota (verde = vantagem, vermelho = desvantagem).</p>
         <div className="opp">
           {ROLES.map(r => (
             <div key={r} className="opp-row">
               <span className="role">{ROLE_LABEL[r]}</span>
               <ChampImg id={opp.lineup[r]} name={s.champions[opp.lineup[r]].name} className="ic" />
               <span>{s.champions[opp.lineup[r]].name}</span>
+              <span className={`lane-edge ${lanes[r].cls}`} title={`${cards[r].name} x ${s.champions[opp.lineup[r]].name}: ${lanes[r].label}`} aria-label={lanes[r].label}>
+                {lanes[r].arrows}
+              </span>
             </div>
           ))}
         </div>
@@ -234,8 +246,18 @@ function LineupStage({ s, t, me, match, act, pending }: {
   );
 }
 
-function LiveMatch({ s, t, m, me, act, pending, serverTime }: {
+/** Vantagem do confronto direto em setas (matchup real de alto elo quando há amostra). */
+function laneArrow(edge: number): { arrows: string; cls: string; label: string } {
+  if (edge >= 1.5) return { arrows: '▲▲', cls: 'up', label: 'grande vantagem' };
+  if (edge >= 0.5) return { arrows: '▲', cls: 'up', label: 'vantagem' };
+  if (edge <= -1.5) return { arrows: '▼▼', cls: 'down', label: 'grande desvantagem' };
+  if (edge <= -0.5) return { arrows: '▼', cls: 'down', label: 'desvantagem' };
+  return { arrows: '=', cls: 'even', label: 'equilibrado' };
+}
+
+function LiveMatch({ s, t, m, me, act, pending, serverTime, victoryFx }: {
   s: AuctionState; t: TournamentState; m: TMatch; me: string | null; act: (a: ClientAction) => void; pending: boolean; serverTime: () => number;
+  victoryFx?: Record<string, string | null | undefined>;
 }) {
   const changesKey = JSON.stringify(m.changes);
   // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -245,6 +267,7 @@ function LiveMatch({ s, t, m, me, act, pending, serverTime }: {
     const team: TeamEntry = t.teams[id];
     return {
       name: team.name, color, splitpush: team.strategy.estilo === 'splitpush',
+      victoryFx: isVictoryFx(victoryFx?.[id]) ? victoryFx![id] as VictoryFx : null,
       champs: Object.fromEntries(ROLES.map(r => [r, { id: team.lineup[r], name: s.champions[team.lineup[r]].name }])) as ViewerSide['champs'],
     };
   };
