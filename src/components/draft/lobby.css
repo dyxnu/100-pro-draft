@@ -81,3 +81,7 @@
   .lb-invite { align-items: flex-start; }
   .lb-hero h1 { font-size: 28px; }
 }
+.lb-addbot { margin-top: 6px; padding: 4px 10px; border-radius: 999px; font-size: 12px; font-weight: 800; color: var(--color-accent); background: var(--color-moon); border: 1px solid #d3cff5; transition: transform .15s, background .15s; }
+.lb-addbot:hover:not(:disabled) { transform: translateY(-1px); background: #ddd8ff; }
+.lb-status.host { margin-left: 4px; color: #7a6224; background: #fff3c4; }
+.lb-change.danger { color: var(--color-danger); }

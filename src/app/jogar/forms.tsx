@@ -22,10 +22,6 @@ export function CreateRoomForm() {
   const [state, action, pending] = useActionState(createRoomAction, {});
   return (
     <form action={action} className="space-y-4">
-      <label className="flex items-center gap-3 text-sm">
-        <input type="checkbox" name="bots" defaultChecked className="h-4 w-4 accent-[#4c4fb5]" />
-        Completar vagas vazias com bots
-      </label>
       <label className="block">
         <span className="label">Velocidade</span>
         <select name="speed" className="input" defaultValue="normal">

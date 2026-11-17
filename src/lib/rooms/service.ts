@@ -150,7 +150,45 @@ export async function setLobbyReady(code: string, userId: string, ready: boolean
   return { ok: true };
 }
 
-export async function startDraft(code: string, userId: string, now = Date.now()): Promise<Result> {
+/** O dono coloca um bot numa vaga livre (bots só entram assim, nunca sozinhos). */
+export async function addBot(code: string, userId: string): Promise<Result> {
+  const admin = createAdminClient();
+  const room = await getRoom(admin, code);
+  if (!room) return { ok: false, reason: 'Sala não encontrada.' };
+  if (room.host_id !== userId) return { ok: false, reason: 'Só o dono da sala pode adicionar bots.' };
+  if (room.status !== 'lobby') return { ok: false, reason: 'O draft já começou.' };
+  for (let attempt = 0; attempt < 3; attempt++) {
+    const members = await getMembers(admin, room.id);
+    const seat = [...Array(room.max_players).keys()].find(i => !members.some(m => m.seat === i));
+    if (seat == null) return { ok: false, reason: 'Não há vaga livre.' };
+    const used = new Set(members.map(m => m.display_name));
+    const { error } = await admin.from('room_members').insert({
+      room_id: room.id, seat, user_id: null,
+      bot_profile: BOT_PROFILES[seat % BOT_PROFILES.length],
+      display_name: BOT_NAMES.find(n => !used.has(n)) ?? `Bot ${seat + 1}`,
+    });
+    if (!error) return { ok: true };
+    if (error.code !== '23505') return { ok: false, reason: 'Não foi possível adicionar o bot.' };
+  }
+  return { ok: false, reason: 'Alguém entrou agora mesmo. Tente de novo.' };
+}
+
+/** O dono tira um bot da sala. */
+export async function removeBot(code: string, userId: string, seat: number): Promise<Result> {
+  const admin = createAdminClient();
+  const room = await getRoom(admin, code);
+  if (!room) return { ok: false, reason: 'Sala não encontrada.' };
+  if (room.host_id !== userId) return { ok: false, reason: 'Só o dono da sala pode remover bots.' };
+  if (room.status !== 'lobby') return { ok: false, reason: 'O draft já começou.' };
+  await admin.from('room_members').delete().eq('room_id', room.id).eq('seat', seat).is('user_id', null);
+  return { ok: true };
+}
+
+/**
+ * Começa o leilão. Todos os jogadores (inclusive o dono) precisam estar prontos.
+ * `fillBots` (só no "Treinar contra bots") completa as vagas vazias com bots e dispensa o pronto.
+ */
+export async function startDraft(code: string, userId: string, now = Date.now(), opts: { fillBots?: boolean } = {}): Promise<Result> {
   const admin = createAdminClient();
   const room = await getRoom(admin, code);
   if (!room) return { ok: false, reason: 'Sala não encontrada.' };
@@ -158,12 +196,11 @@ export async function startDraft(code: string, userId: string, now = Date.now())
   if (room.status !== 'lobby') return { ok: false, reason: 'O draft já começou.' };
 
   let members = await getMembers(admin, room.id);
-  const notReady = members.filter(m => m.user_id && m.user_id !== userId && !m.ready);
-  if (notReady.length) return { ok: false, reason: `Falta confirmar: ${notReady.map(m => m.display_name).join(', ')}.` };
-  // Sem bots, a sala começa com quem está (mínimo 2). Com bots, completa até o limite.
-  const free = room.bots_enabled ? [...Array(room.max_players).keys()].filter(i => !members.some(m => m.seat === i)) : [];
+  const notReady = opts.fillBots ? [] : members.filter(m => m.user_id && !m.ready);
+  if (notReady.length) return { ok: false, reason: `Falta ficar pronto: ${notReady.map(m => m.display_name).join(', ')}.` };
+  const free = opts.fillBots ? [...Array(room.max_players).keys()].filter(i => !members.some(m => m.seat === i)) : [];
   if (members.length + free.length < 2) {
-    return { ok: false, reason: 'Precisa de pelo menos 2 participantes. Convide alguém ou ative os bots.' };
+    return { ok: false, reason: 'Precisa de pelo menos 2 participantes. Convide alguém ou adicione bots.' };
   }
   if (free.length) {
     const used = new Set(members.map(m => m.display_name));

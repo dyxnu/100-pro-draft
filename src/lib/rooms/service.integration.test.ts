@@ -33,7 +33,7 @@ describe.runIf(enabled)('salas no Supabase (integração)', () => {
 
     expect((await svc.joinRoom(code, host.id, host.username)).ok).toBe(true); // entrar de novo não duplica
     const t0 = Date.now();
-    expect(await svc.startDraft(code, host.id, t0)).toEqual({ ok: true });
+    expect(await svc.startDraft(code, host.id, t0, { fillBots: true })).toEqual({ ok: true });
     expect((await svc.startDraft(code, host.id, t0)).ok).toBe(false); // não inicia duas vezes
 
     const { data: members } = await admin.from('room_members').select('seat, user_id').eq('room_id',

@@ -6,7 +6,7 @@ import { authRealtime, getBrowserClient } from '@/lib/supabase/client';
 import type { MemberRow, RoomRow, RoomSpeed } from '@/lib/rooms/types';
 import { ROOM_SIZE, seatPlayerId } from '@/lib/rooms/types';
 import {
-  joinRoomAction, leaveRoomAction, lobbyReadyAction, startDraftAction, updateSettingsAction, type RoomFormState,
+  addBotAction, joinRoomAction, leaveRoomAction, removeBotAction, lobbyReadyAction, startDraftAction, updateSettingsAction, type RoomFormState,
 } from '@/app/sala/actions';
 import { Avatar, AvatarPicker } from '@/components/profile/Avatar';
 import { SEAT_COLORS } from './ui';
@@ -30,10 +30,8 @@ export function LobbyView({ room, members, meId, isMember, avatars, myAvatar }: 
   const me = members.find(m => m.user_id === meId);
   const humans = members.filter(m => m.user_id);
   const free = room.max_players - members.length;
-  const guests = humans.filter(m => m.user_id !== room.host_id);
-  const waiting = guests.filter(m => !m.ready);
-  const total = room.bots_enabled ? room.max_players : members.length;
-  const canStart = waiting.length === 0 && total >= 2;
+  const waiting = humans.filter(m => !m.ready);
+  const canStart = waiting.length === 0 && members.length >= 2;
   const readyCount = humans.length - waiting.length;
 
   // Tempo real: mudanças na sala/membros recarregam os dados do servidor; um "ping" por broadcast
@@ -90,7 +88,7 @@ export function LobbyView({ room, members, meId, isMember, avatars, myAvatar }: 
             <span>👥 {members.length}/{room.max_players} participantes</span>
             <span>⏱ {room.speed === 'rapido' ? '6 s' : '10 s'} por campeão</span>
             <span>{room.show_overall ? '👁 overall à mostra' : '🙈 overall escondido'}</span>
-            <span>{room.bots_enabled ? '🤖 completa com bots' : '🧑‍🤝‍🧑 só jogadores'}</span>
+            <span>🤖 {members.length - humans.length} bot{members.length - humans.length === 1 ? '' : 's'}</span>
           </div>
         </div>
         <div className="lb-invite">
@@ -117,9 +115,12 @@ export function LobbyView({ room, members, meId, isMember, avatars, myAvatar }: 
                 return (
                   <div key={seat} className="lb-seat empty">
                     <span className="lb-plus">+</span>
-                    <div>
+                    <div className="min-w-0 flex-1">
                       <p className="font-bold">Vaga {seat + 1}</p>
-                      <p className="text-xs text-muted">{room.bots_enabled ? 'um bot entra se ninguém vier' : 'convide um amigo'}</p>
+                      <p className="text-xs text-muted">convide um amigo{isHost ? ' ou' : ''}</p>
+                      {isHost && (
+                        <button className="lb-addbot" disabled={pending} onClick={() => run(() => addBotAction(room.code))}>🤖 Adicionar bot</button>
+                      )}
                     </div>
                   </div>
                 );
@@ -128,8 +129,8 @@ export function LobbyView({ room, members, meId, isMember, avatars, myAvatar }: 
               const isMe = m.user_id === meId;
               const hostSeat = m.user_id === room.host_id;
               const isOnline = isBot || online.has(m.user_id!);
-              const ready = isBot || hostSeat || m.ready;
-              const status = isBot ? 'Bot' : hostSeat ? 'Dono da sala' : m.ready ? 'Pronto' : 'Aguardando';
+              const ready = isBot || m.ready;
+              const status = isBot ? 'Bot' : m.ready ? 'Pronto' : 'Aguardando';
               return (
                 <div key={seat} className={`lb-seat ${ready ? 'ready' : ''} ${isMe ? 'me' : ''}`} style={{ '--seat': color } as React.CSSProperties}>
                   <div className="lb-ava">
@@ -139,7 +140,9 @@ export function LobbyView({ room, members, meId, isMember, avatars, myAvatar }: 
                   </div>
                   <div className="min-w-0 flex-1">
                     <p className="truncate text-base font-extrabold">{m.display_name}{isMe && <span className="ml-1.5 text-xs font-semibold text-muted">(você)</span>}</p>
-                    <span className={`lb-status ${isBot ? 'bot' : ready ? 'ok' : 'wait'}`}>{ready && !isBot && !hostSeat ? '✓ ' : ''}{status}</span>
+                    <span className={`lb-status ${isBot ? 'bot' : ready ? 'ok' : 'wait'}`}>{ready && !isBot ? '✓ ' : ''}{status}</span>
+                    {hostSeat && <span className="lb-status host">Dono</span>}
+                    {isBot && isHost && <button className="lb-change danger" disabled={pending} onClick={() => run(() => removeBotAction(room.code, seat))}>Remover bot</button>}
                     {isMe && <button className="lb-change" onClick={() => setPicker(true)}>Trocar ícone</button>}
                   </div>
                 </div>
@@ -162,10 +165,14 @@ export function LobbyView({ room, members, meId, isMember, avatars, myAvatar }: 
             ) : isHost ? (
               <>
                 <h2>Começar o leilão</h2>
+                <button className={`lb-big ${me?.ready ? 'btn-secondary' : 'btn-primary'}`} disabled={pending}
+                  onClick={() => run(() => lobbyReadyAction(room.code, !me?.ready))}>
+                  {me?.ready ? 'Desfazer pronto' : '✓ Estou pronto'}
+                </button>
                 <p className="text-sm text-muted">
                   {canStart ? 'Todos prontos! Pode começar.'
-                    : waiting.length ? `Aguardando ${waiting.map(w => w.display_name).join(', ')} ficar pronto.`
-                    : 'Precisa de pelo menos 2 participantes (ou ligue os bots).'}
+                    : members.length < 2 ? 'Precisa de pelo menos 2 participantes: convide alguém ou adicione bots.'
+                    : `Aguardando ${waiting.map(w => (w.user_id === meId ? 'você' : w.display_name)).join(', ')} ficar pronto.`}
                 </p>
                 <button className={`btn-primary lb-big ${canStart ? 'go' : ''}`} disabled={pending || !canStart} onClick={() => startTransition(async () => {
                   setError(undefined);
@@ -196,8 +203,6 @@ export function LobbyView({ room, members, meId, isMember, avatars, myAvatar }: 
           <section className="lb-panel">
             <h2>Configurações {!isHost && <small>(o dono escolhe)</small>}</h2>
             <div className="lb-settings">
-              <Toggle label="Completar vagas com bots" on={room.bots_enabled} disabled={!isHost || pending}
-                onChange={v => run(() => updateSettingsAction(room.code, { botsEnabled: v }))} />
               <Toggle label="Overall à mostra no leilão" on={room.show_overall} disabled={!isHost || pending}
                 onChange={v => run(() => updateSettingsAction(room.code, { showOverall: v }))} />
               <div className="lb-row">

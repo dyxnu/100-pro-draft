@@ -5,7 +5,7 @@ import { revalidatePath } from 'next/cache';
 import { getCurrentUser } from '@/lib/supabase/server';
 import { isAdminConfigured } from '@/lib/supabase/admin';
 import {
-  type RoomSettings, createRoom, joinRoom, leaveRoom, normalizeCode, setLobbyReady, startDraft, updateRoomSettings,
+  type RoomSettings, addBot, createRoom, joinRoom, leaveRoom, normalizeCode, removeBot, setLobbyReady, startDraft, updateRoomSettings,
 } from '@/lib/rooms/service';
 import type { RoomSpeed } from '@/lib/rooms/types';
 
@@ -39,7 +39,7 @@ export async function trainAction(): Promise<RoomFormState> {
   if (!isAdminConfigured) return NOT_READY;
   const r = await createRoom(user.id, profile!.username, { botsEnabled: true, speed: 'normal' });
   if (!r.ok) return { error: r.reason };
-  const started = await startDraft(r.code, user.id);
+  const started = await startDraft(r.code, user.id, Date.now(), { fillBots: true });
   if (!started.ok) return { error: started.reason };
   redirect(`/sala/${r.code}`);
 }
@@ -78,6 +78,22 @@ export async function updateSettingsAction(code: string, settings: RoomSettings)
   const { user } = await requireUser(`/sala/${code}`);
   if (!isAdminConfigured) return NOT_READY;
   const r = await updateRoomSettings(code, user.id, settings);
+  revalidatePath(`/sala/${code}`);
+  return r.ok ? {} : { error: r.reason };
+}
+
+export async function addBotAction(code: string): Promise<RoomFormState> {
+  const { user } = await requireUser(`/sala/${code}`);
+  if (!isAdminConfigured) return NOT_READY;
+  const r = await addBot(code, user.id);
+  revalidatePath(`/sala/${code}`);
+  return r.ok ? {} : { error: r.reason };
+}
+
+export async function removeBotAction(code: string, seat: number): Promise<RoomFormState> {
+  const { user } = await requireUser(`/sala/${code}`);
+  if (!isAdminConfigured) return NOT_READY;
+  const r = await removeBot(code, user.id, Math.floor(Number(seat)));
   revalidatePath(`/sala/${code}`);
   return r.ok ? {} : { error: r.reason };
 }
