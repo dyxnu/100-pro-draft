@@ -31,9 +31,12 @@ export const normalizeCode = (code: string) => code.trim().toUpperCase();
 // Leitura
 // ---------------------------------------------------------------------------
 export async function loadCatalog(admin: Admin): Promise<Champion[]> {
-  const { data: champs, error } = await admin.from('champions').select('id, name, tier').eq('active', true);
+  // As duas tabelas em paralelo.
+  const [{ data: champs, error }, { data: routes, error: e2 }] = await Promise.all([
+    admin.from('champions').select('id, name, tier').eq('active', true),
+    admin.from('champion_routes').select('champion_id, lane, is_primary'),
+  ]);
   if (error) throw error;
-  const { data: routes, error: e2 } = await admin.from('champion_routes').select('champion_id, lane, is_primary');
   if (e2) throw e2;
   return champs.map(c => {
     const rs = routes.filter(r => r.champion_id === c.id)
@@ -47,6 +50,17 @@ async function getRoom(admin: Admin, code: string): Promise<RoomRow | null> {
   if (!CODE_RE.test(c)) return null;
   const { data } = await admin.from('rooms').select('*').eq('code', c).maybeSingle<RoomRow>();
   return data;
+}
+
+/** Sala e vagas numa consulta só. */
+async function getRoomWithMembers(admin: Admin, code: string): Promise<{ room: RoomRow; members: MemberRow[] } | null> {
+  const c = normalizeCode(code);
+  if (!CODE_RE.test(c)) return null;
+  const { data } = await admin.from('rooms')
+    .select('*, room_members(room_id, seat, user_id, bot_profile, display_name, ready)').eq('code', c).maybeSingle();
+  if (!data) return null;
+  const { room_members, ...room } = data as RoomRow & { room_members: MemberRow[] };
+  return { room: room as RoomRow, members: [...room_members].sort((a, b) => a.seat - b.seat) };
 }
 
 async function getMembers(admin: Admin, roomId: string): Promise<MemberRow[]> {
@@ -176,11 +190,11 @@ export async function addBot(code: string, userId: string): Promise<Result> {
 /** O dono preenche todas as vagas livres com bots de uma vez. */
 export async function fillWithBots(code: string, userId: string): Promise<Result> {
   const admin = createAdminClient();
-  const room = await getRoom(admin, code);
-  if (!room) return { ok: false, reason: 'Sala não encontrada.' };
+  const found = await getRoomWithMembers(admin, code);
+  if (!found) return { ok: false, reason: 'Sala não encontrada.' };
+  const { room, members } = found;
   if (room.host_id !== userId) return { ok: false, reason: 'Só o dono da sala pode adicionar bots.' };
   if (room.status !== 'lobby') return { ok: false, reason: 'O draft já começou.' };
-  const members = await getMembers(admin, room.id);
   const free = [...Array(room.max_players).keys()].filter(i => !members.some(m => m.seat === i));
   if (!free.length) return { ok: false, reason: 'Não há vaga livre.' };
   const used = new Set(members.map(m => m.display_name));
@@ -211,12 +225,13 @@ export async function removeBot(code: string, userId: string, seat: number): Pro
  */
 export async function startDraft(code: string, userId: string, now = Date.now(), opts: { fillBots?: boolean } = {}): Promise<Result> {
   const admin = createAdminClient();
-  const room = await getRoom(admin, code);
-  if (!room) return { ok: false, reason: 'Sala não encontrada.' };
+  const found = await getRoomWithMembers(admin, code);
+  if (!found) return { ok: false, reason: 'Sala não encontrada.' };
+  const { room } = found;
   if (room.host_id !== userId) return { ok: false, reason: 'Só o dono da sala pode iniciar.' };
   if (room.status !== 'lobby') return { ok: false, reason: 'O draft já começou.' };
 
-  let members = await getMembers(admin, room.id);
+  let members = found.members;
   const notReady = opts.fillBots ? [] : members.filter(m => m.user_id && !m.ready);
   if (notReady.length) return { ok: false, reason: `Falta ficar pronto: ${notReady.map(m => m.display_name).join(', ')}.` };
   const free = opts.fillBots ? [...Array(room.max_players).keys()].filter(i => !members.some(m => m.seat === i)) : [];
@@ -237,12 +252,14 @@ export async function startDraft(code: string, userId: string, now = Date.now(),
   }
 
   // Marca a sala como "em draft" primeiro: impede dois inícios simultâneos.
-  const { data: claimed } = await admin.from('rooms')
-    .update({ status: 'drafting', started_at: new Date(now).toISOString() })
-    .eq('id', room.id).eq('status', 'lobby').select('id');
+  // (o catálogo é carregado ao mesmo tempo)
+  const [{ data: claimed }, champions] = await Promise.all([
+    admin.from('rooms')
+      .update({ status: 'drafting', started_at: new Date(now).toISOString() })
+      .eq('id', room.id).eq('status', 'lobby').select('id'),
+    loadCatalog(admin),
+  ]);
   if (!claimed?.length) return { ok: false, reason: 'O draft já começou.' };
-
-  const champions = await loadCatalog(admin);
   const seed = Math.floor(Math.random() * 2 ** 31);
   const state = createGame({
     players: members.map(m => ({

@@ -1,3 +1,4 @@
+import { cache } from 'react';
 import 'server-only';
 import { cookies } from 'next/headers';
 import { createServerClient } from '@supabase/ssr';
@@ -31,16 +32,22 @@ export interface Profile {
   created_at: string;
 }
 
-/** Usuário logado + perfil, ou null. Nunca lança se o Supabase não estiver configurado. */
-export async function getCurrentUser() {
+/**
+ * Usuário logado + perfil, ou null. Nunca lança se o Supabase não estiver configurado.
+ * getClaims valida o token (localmente, quando o projeto usa chaves assimétricas) e o cache()
+ * evita repetir a consulta no mesmo carregamento (cabeçalho + página).
+ */
+export const getCurrentUser = cache(async () => {
   if (!isSupabaseConfigured) return null;
   const supabase = await createClient();
-  const { data: { user } } = await supabase.auth.getUser();
-  if (!user) return null;
+  const { data } = await supabase.auth.getClaims();
+  const sub = data?.claims?.sub;
+  if (!sub) return null;
+  const user = { id: sub };
   const { data: profile } = await supabase
     .from('profiles')
     .select('id, username, tag, avatar_url, level, xp, created_at')
     .eq('id', user.id)
     .single<Profile>();
   return { user, profile };
-}
+});

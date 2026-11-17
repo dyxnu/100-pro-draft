@@ -63,7 +63,7 @@ export function LobbyView({ room, members, meId, isMember, avatars, myAvatar }: 
     setError(undefined);
     const r = await fn();
     if (r?.error) setError(r.error);
-    else { router.refresh(); ping(); }
+    else ping(); // a ação já devolve a tela atualizada (revalidatePath); só avisa os outros
   });
 
   const [origin, setOrigin] = useState('');

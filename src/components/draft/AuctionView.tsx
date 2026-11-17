@@ -117,7 +117,7 @@ export function AuctionView({ code, roomId, initialState, initialTournament, ini
         {snap.tournament
           ? <TournamentView s={s} t={snap.tournament} me={me} act={act} pending={pending} serverTime={serverTime} auctionSummary={<Results s={s} me={me} />} />
           : <Results s={s} me={me} />}
-        {toast && <div className="ad-toast" role="alert">{toast}</div>}
+        {toast && <div className="lx-toast" role="alert">{toast}</div>}
       </AvatarMapContext.Provider>
     );
   }
@@ -133,7 +133,7 @@ export function AuctionView({ code, roomId, initialState, initialTournament, ini
 function PlayerAvatar({ pid, name, small = false }: { pid: string; name: string; small?: boolean }) {
   const icon = usePlayerAvatar(pid);
   if (icon) return <Avatar id={icon} size={small ? 26 : 34} color={seatColor(pid)} />;
-  return <span className={`ad-avatar ${small ? 'sm' : ''}`} style={{ background: seatColor(pid) }}>{name.slice(0, 1).toUpperCase()}</span>;
+  return <span className={`lx-avatar ${small ? 'sm' : ''}`} style={{ background: seatColor(pid) }}>{name.slice(0, 1).toUpperCase()}</span>;
 }
 
 /** A tela do leilão (sem rede): recebe o estado e envia intenções por act(). */
@@ -148,25 +148,25 @@ export function AuctionStage({ s, me, act, pending, serverTime, code, toast }: {
   const others = s.players.filter(p => p.id !== me);
 
   return (
-    <div className="ad">
-      <div className="ad-top">
-        <span className="ad-pill">{cur ? `Campeão ${cur.index} de ${s.totalLots}` : rp ? 'Escolhendo a rota…' : 'Próximo campeão…'}</span>
-        <span className="ad-room">Sala <b>{code}</b> · {s.sales.length}/{s.players.length * 5} vagas preenchidas</span>
+    <div className="lx">
+      <div className="lx-top">
+        <span className="lx-pill">{cur ? `Campeão ${cur.index} de ${s.totalLots}` : rp ? 'Escolhendo a rota…' : 'Próximo campeão…'}</span>
+        <span className="lx-room">Sala <b>{code}</b> · {s.sales.length}/{s.players.length * 5} vagas preenchidas</span>
       </div>
 
-      <div className="ad-grid">
-        <aside className="ad-left">
-          {mine ? <MyPanel s={s} meId={mine.id} /> : <div className="ad-box muted">Você está assistindo este leilão.</div>}
+      <div className="lx-grid">
+        <aside className="lx-left">
+          {mine ? <MyPanel s={s} meId={mine.id} /> : <div className="lx-box muted">Você está assistindo este leilão.</div>}
           <RecentBids s={s} />
         </aside>
 
-        <section className="ad-center">
+        <section className="lx-center">
           <LotCard s={s} me={me} lastPlaced={lastPlaced} now={serverTime} />
           {me && cur && <BidBar key={cur.champId} s={s} me={me} pending={pending} act={act} />}
         </section>
 
-        <aside className="ad-right">
-          <div className="ad-head"><h3>Outros jogadores</h3><small>{s.players.length} na sala</small></div>
+        <aside className="lx-right">
+          <div className="lx-head"><h3>Outros jogadores</h3><small>{s.players.length} na sala</small></div>
           {others.map(p => <PlayerRow key={p.id} s={s} pid={p.id} />)}
           <LastSold s={s} />
         </aside>
@@ -175,7 +175,7 @@ export function AuctionStage({ s, me, act, pending, serverTime, code, toast }: {
       {me && rp && s.phase === 'routePick' && rp.playerId === me && (
         <RouteModal s={s} pending={pending} now={serverTime} onPick={role => act({ type: 'route', role })} />
       )}
-      {toast && <div className="ad-toast" role="alert">{toast}</div>}
+      {toast && <div className="lx-toast" role="alert">{toast}</div>}
     </div>
   );
 }
@@ -189,22 +189,22 @@ function MyPanel({ s, meId }: { s: AuctionState; meId: string }) {
   const open = openRoles(p).length;
   return (
     <>
-      <div className="ad-me">
+      <div className="lx-me">
         <PlayerAvatar pid={meId} name={p.name} />
         <div><b>{p.name}</b><small>Você</small></div>
-        <span className="ad-count">{filled}/5</span>
+        <span className="lx-count">{filled}/5</span>
       </div>
-      <div className="ad-budget">
+      <div className="lx-budget">
         <small>Seu orçamento</small>
         <div key={p.budget} className="anim-bump"><span className="coin">◐</span>{fmt(p.budget)}</div>
         {open > 0 && <small>{fmt(Math.floor(p.budget / open / 100) * 100)} em média por vaga</small>}
       </div>
-      <div className="ad-slots">
+      <div className="lx-slots">
         {ROLES.map(r => {
           const slot = p.roster[r];
           const c = slot ? s.champions[slot.champId] : null;
           return (
-            <div key={r} className={`ad-slot ${slot ? 'filled anim-reveal' : ''}`}>
+            <div key={r} className={`lx-slot ${slot ? 'filled anim-reveal' : ''}`}>
               {c ? (
                 <>
                   <ChampImg id={c.id} name={c.name} className="ic" />
@@ -226,7 +226,7 @@ function RecentBids({ s }: { s: AuctionState }) {
   const cur = s.current;
   const bids = (cur ? s.bids.filter(b => b.champId === cur.champId) : s.bids).slice(-5).reverse();
   return (
-    <div className="ad-list">
+    <div className="lx-list">
       <h4>Últimos lances</h4>
       {bids.length ? bids.map(b => (
         <div key={b.seq} className="row anim-fade-up">
@@ -402,7 +402,7 @@ function PlayerRow({ s, pid }: { s: AuctionState; pid: string }) {
   const filled = ROLES.length - openRoles(p).length;
   const tag = p.isBot ? BOT_PROFILES[p.botProfile ?? 'equilibrado'].label : 'Jogador';
   return (
-    <div className={`ad-player ${leader ? 'leader' : ''} ${cur && !el.ok && !leader ? 'out' : ''}`} style={{ '--pc': seatColor(pid) } as React.CSSProperties}>
+    <div className={`lx-player ${leader ? 'leader' : ''} ${cur && !el.ok && !leader ? 'out' : ''}`} style={{ '--pc': seatColor(pid) } as React.CSSProperties}>
       <div className="ph">
         <PlayerAvatar pid={pid} name={p.name} small />
         <b>{p.name}</b>
@@ -430,7 +430,7 @@ function PlayerRow({ s, pid }: { s: AuctionState; pid: string }) {
 function LastSold({ s }: { s: AuctionState }) {
   const sold = s.sales.slice(-4).reverse();
   return (
-    <div className="ad-list">
+    <div className="lx-list">
       <h4>Últimos arremates</h4>
       {sold.length ? sold.map(x => (
         <div key={x.champId} className="row sold anim-fade-up">
@@ -454,8 +454,8 @@ function RouteModal({ s, pending, now, onPick }: {
     return () => clearInterval(id);
   }, [rp.deadline, now]);
   return (
-    <div className="ad-overlay">
-      <div className="ad-modal anim-reveal">
+    <div className="lx-overlay">
+      <div className="lx-modal anim-reveal">
         <ChampImg id={c.id} name={c.name} className="ic" />
         <h2>{c.name} é seu!</h2>
         <p>{rp.price ? `Pago: ${fmt(rp.price)}` : 'De graça'} · escolha a rota em <b>{left}</b> s</p>
@@ -495,7 +495,7 @@ function Results({ s, me }: { s: AuctionState; me: string | null }) {
   };
 
   return (
-    <div className="ad-results">
+    <div className="lx-results">
       <div className="hls">
         {highlights.map(h => (
           <div key={h.k} className="hl"><small>{h.k}</small><b>{h.v}</b><span>{h.d}</span></div>

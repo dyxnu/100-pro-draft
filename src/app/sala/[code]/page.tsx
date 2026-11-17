@@ -1,7 +1,6 @@
 import type { Metadata } from 'next';
 import Link from 'next/link';
 import { notFound, redirect } from 'next/navigation';
-import { headers } from 'next/headers';
 import { createClient, getCurrentUser } from '@/lib/supabase/server';
 import { normalizeCode } from '@/lib/rooms/service';
 import { type AuctionRow, type MemberRow, type RoomRow, seatPlayerId } from '@/lib/rooms/types';
@@ -24,11 +23,16 @@ export default async function SalaPage({ params }: Params) {
 
   // Leitura com o usuário logado: o RLS decide o que ele pode ver.
   const supabase = await createClient();
-  const { data: room } = await supabase.from('rooms').select('*').eq('code', code).maybeSingle<RoomRow>();
-  if (!room) notFound();
-  const { data: members } = await supabase.from('room_members')
-    .select('room_id, seat, user_id, bot_profile, display_name, ready').eq('room_id', room.id).order('seat');
-  const list = (members ?? []) as MemberRow[];
+  // Uma ida ao banco: sala, vagas e leilão juntos (o RLS continua valendo).
+  const { data: full } = await supabase.from('rooms')
+    .select('*, room_members(room_id, seat, user_id, bot_profile, display_name, ready), auctions(id, room_id, state, tournament, version, next_tick_at)')
+    .eq('code', code).maybeSingle();
+  if (!full) notFound();
+  const { room_members: members, auctions: auctionRel, ...roomOnly } = full as RoomRow & {
+    room_members: MemberRow[]; auctions: Omit<AuctionRow, 'bot_brains'> | Omit<AuctionRow, 'bot_brains'>[] | null;
+  };
+  const room = roomOnly as RoomRow;
+  const list = [...(members ?? [])].sort((a, b) => a.seat - b.seat);
   const me = list.find(m => m.user_id === session.user.id) ?? null;
 
   // Ícone de cada vaga: o do perfil para pessoas, um fixo para bots.
@@ -51,10 +55,7 @@ export default async function SalaPage({ params }: Params) {
     return <LobbyView room={room} members={list} meId={session.user.id} isMember={!!me} avatars={avatars} myAvatar={session.profile?.avatar_url ?? null} />;
   }
 
-  const { data: auction } = await supabase.from('auctions')
-    .select('id, room_id, state, tournament, version, next_tick_at').eq('room_id', room.id).maybeSingle<Omit<AuctionRow, 'bot_brains'>>();
-  const hdr = await headers();
-  console.log('[sala]', hdr.get('rsc') ? 'RSC' : 'DOC', hdr.get('next-action') ? 'ACTION' : '', hdr.get('referer')?.slice(-30) ?? '', code, room.status, 'auction?', !!auction, 'phase', auction?.state?.phase, 'seat', me?.seat ?? null);
+  const auction = Array.isArray(auctionRel) ? auctionRel[0] ?? null : auctionRel;
   if (!auction) {
     return <Message title="Draft em andamento" text="Esse draft já começou e você não está nesta sala." />;
   }
