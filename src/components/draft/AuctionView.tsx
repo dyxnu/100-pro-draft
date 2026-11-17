@@ -19,7 +19,7 @@ interface Snapshot { state: AuctionState; tournament: TournamentState | null; ne
 // Ordem das versões: leilão primeiro, depois campeonato (para descartar mensagens antigas).
 const versionOf = (st: AuctionState, t: TournamentState | null) => st.version * 1_000_000 + (t?.version ?? -1);
 
-export function AuctionView({ code, roomId, initialState, initialTournament, initialNextTickAt, serverNow, mySeat, avatars = {} }: {
+export function AuctionView({ code, roomId, initialState, initialTournament, initialNextTickAt, serverNow, mySeat, avatars = {}, victoryFx }: {
   code: string;
   roomId: string;
   initialState: AuctionState;
@@ -28,6 +28,7 @@ export function AuctionView({ code, roomId, initialState, initialTournament, ini
   serverNow: number;
   mySeat: number | null;
   avatars?: Record<string, string>;
+  victoryFx?: Record<string, string>;
 }) {
   const me = mySeat == null ? null : seatPlayerId(mySeat);
   const [snap, setSnap] = useState<Snapshot>({ state: initialState, tournament: initialTournament, nextTickAt: initialNextTickAt });
@@ -150,7 +151,7 @@ export function AuctionView({ code, roomId, initialState, initialTournament, ini
     return (
       <AvatarMapContext.Provider value={avatars}>
         {snap.tournament
-          ? <TournamentView s={s} t={snap.tournament} me={me} act={act} pending={pending} serverTime={serverTime} auctionSummary={<Results s={s} me={me} />} />
+          ? <TournamentView s={s} t={snap.tournament} me={me} act={act} pending={pending} serverTime={serverTime} auctionSummary={<Results s={s} me={me} />} victoryFx={victoryFx} />
           : <Results s={s} me={me} />}
         {toast && <div className="lx-toast" role="alert">{toast}</div>}
       </AvatarMapContext.Provider>

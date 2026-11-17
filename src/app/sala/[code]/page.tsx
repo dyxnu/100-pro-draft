@@ -45,11 +45,13 @@ export default async function SalaPage({ params }: Params) {
     : { data: [] as Partial<Profile>[] };
   const profOf = new Map(((profs ?? []) as Partial<Profile>[]).map(p => [p.id, p]));
   const avatars: Record<string, string> = {};
+  const victoryFx: Record<string, string> = {}; // efeito de vitória escolhido no perfil (por vaga)
   const ranks: Record<string, LobbyRank> = {};
   for (const m of list) {
     const p = m.user_id ? profOf.get(m.user_id) : null;
     const a = m.user_id ? p?.avatar_url : botAvatar(m.seat);
     if (a) avatars[seatPlayerId(m.seat)] = a;
+    if (p?.victory_fx) victoryFx[seatPlayerId(m.seat)] = p.victory_fx;
     if (m.user_id && p && 'lp' in p) {
       const tier = (p.rank_tier ?? null) as Tier | null;
       ranks[m.user_id] = {
@@ -90,6 +92,7 @@ export default async function SalaPage({ params }: Params) {
         serverNow={Date.now()}
         mySeat={me?.seat ?? null}
         avatars={avatars}
+        victoryFx={victoryFx}
       />
     </RoomShell>
   );
