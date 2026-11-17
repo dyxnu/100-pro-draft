@@ -5,17 +5,23 @@
 // Uso: npm run riot:collect -- --matches 1500 --platform br1
 // A chave de desenvolvimento permite 100 pedidos a cada 2 minutos: 1500 partidas ≈ 35 min.
 // O progresso fica salvo em .riot-cache/ — dá para parar e continuar depois.
+//
+// Só recalcular as estatísticas a partir do cache (sem chave e sem baixar nada):
+//   node scripts/riot-collect.mjs --aggregate-only [--cache caminho/.riot-cache]   (ou RIOT_CACHE=caminho)
+// Além das duplas do bot, agrega pares do mesmo time ("pairs") e pares de times opostos
+// em rotas diferentes ("versus"), para sinergias e counters gerais.
 import { existsSync, mkdirSync, readdirSync, readFileSync, writeFileSync } from 'node:fs';
 
-process.loadEnvFile('.env.local');
-const KEY = process.env.RIOT_API_KEY;
-if (!KEY) { console.error('Falta RIOT_API_KEY no .env.local'); process.exit(1); }
-
 const arg = (n, d) => { const i = process.argv.indexOf(`--${n}`); return i > -1 ? process.argv[i + 1] : d; };
+const AGGREGATE_ONLY = process.argv.includes('--aggregate-only');
+if (!AGGREGATE_ONLY) { try { process.loadEnvFile('.env.local'); } catch { /* sem .env.local */ } }
+const KEY = process.env.RIOT_API_KEY;
+if (!KEY && !AGGREGATE_ONLY) { console.error('Falta RIOT_API_KEY no .env.local'); process.exit(1); }
+
 const TARGET = Number(arg('matches', 1500));
 const PLATFORM = arg('platform', 'br1');
 const REGION = { br1: 'americas', na1: 'americas', la1: 'americas', la2: 'americas', euw1: 'europe', eun1: 'europe', kr: 'asia' }[PLATFORM] ?? 'americas';
-const CACHE = '.riot-cache';
+const CACHE = arg('cache', process.env.RIOT_CACHE || '.riot-cache');
 mkdirSync(CACHE, { recursive: true });
 
 // ---- limite de pedidos (20/s e 100/2min da chave de desenvolvimento) ----
@@ -38,6 +44,7 @@ const cacheFile = n => `${CACHE}/${n}.json`;
 const load = (n, d) => (existsSync(cacheFile(n)) ? JSON.parse(readFileSync(cacheFile(n), 'utf8')) : d);
 const save = (n, v) => writeFileSync(cacheFile(n), JSON.stringify(v));
 
+if (!AGGREGATE_ONLY) {
 // ---- 1) jogadores de alto elo ----
 let puuids = load(`puuids-${PLATFORM}`, null);
 if (!puuids) {
@@ -79,6 +86,7 @@ for (const id of matchIds) {
 }
 save(`games-${PLATFORM}`, games);
 console.log(`\nPartidas analisadas: ${n}`);
+}
 
 // ---- 4) agregação (junta todas as regiões já coletadas em .riot-cache/) ----
 const allGames = {};
@@ -91,6 +99,8 @@ const POS = { TOP: 'TOP', JUNGLE: 'JUNGLE', MIDDLE: 'MID', BOTTOM: 'ADC', UTILIT
 const champ = {};      // id → { games, wins, roles: { ROLE: { games, wins } }, short, long }
 const matchup = {};    // `A|B|ROLE` → { games, wins } (vitórias de A contra B na mesma rota)
 const duo = {};        // `ADC|SUP` → { games, wins }
+const pair = {};       // `A|B` (ordem alfabética) do mesmo time, qualquer rota → { games, wins }
+const versus = {};     // `A|B` (ordem alfabética) de times opostos e rotas diferentes → vitórias de A
 const inc = (o, k, w) => { o[k] ??= { games: 0, wins: 0 }; o[k].games++; o[k].wins += w; };
 for (const g of Object.values(allGames)) {
   if (!g) continue;
@@ -111,6 +121,14 @@ for (const g of Object.values(allGames)) {
     const sup = g.p.find(x => x[2] === team && x[1] === 'UTILITY');
     if (adc && sup) inc(duo, `${adc[0]}|${sup[0]}`, adc[3]);
   }
+  // Todos os pares da partida: do mesmo time (sinergia) e de times opostos em rotas diferentes (counter).
+  const ps = g.p.filter(x => POS[x[1]]);
+  for (let i = 0; i < ps.length; i++) for (let j = i + 1; j < ps.length; j++) {
+    const [x, y] = ps[i][0] < ps[j][0] ? [ps[i], ps[j]] : [ps[j], ps[i]];
+    if (x[0] === y[0]) continue;
+    if (x[2] === y[2]) inc(pair, `${x[0]}|${y[0]}`, x[3]);
+    else if (x[1] !== y[1]) inc(versus, `${x[0]}|${y[0]}`, x[3]);
+  }
 }
 // Só os campeões do catálogo (o arquivo vai para o navegador junto com as cartas).
 const catalog = new Set([...readFileSync('src/lib/auction/champions.ts', 'utf8').matchAll(/id: '([A-Za-z]+)'/g)].map(m => m[1]));
@@ -118,11 +136,19 @@ const pick = (o, f) => Object.fromEntries(Object.entries(o).filter(([k, v]) => f
 const inCatalog = k => k.split('|').slice(0, 2).every(c => catalog.has(c));
 const total = Object.values(allGames).filter(Boolean).length;
 const patches = [...new Set(Object.values(allGames).filter(Boolean).map(g => g.patch))];
-writeFileSync('src/lib/champions/riot-stats.json', JSON.stringify({
+const OUT = 'src/lib/champions/riot-stats.json';
+// Só reagregando, a data da coleta continua a mesma.
+const prevCollected = AGGREGATE_ONLY && existsSync(OUT) ? JSON.parse(readFileSync(OUT, 'utf8')).collectedAt : null;
+const pairs = pick(pair, (k, v) => inCatalog(k) && v.games >= 15);
+const vs = pick(versus, (k, v) => inCatalog(k) && v.games >= 15);
+writeFileSync(OUT, JSON.stringify({
   source: `Riot Match-V5 · ${platforms.join(", ")} · Challenger/GM/Master · solo/duo`,
-  collectedAt: new Date().toISOString(), matches: total, patches,
+  collectedAt: prevCollected ?? new Date().toISOString(), matches: total, patches,
   champions: pick(champ, k => catalog.has(k)),
   matchups: pick(matchup, (k, v) => inCatalog(k) && v.games >= 3),
   duos: pick(duo, (k, v) => inCatalog(k) && v.games >= 3),
+  pairs,
+  versus: vs,
 }));
-console.log(`Estatísticas salvas: ${Object.keys(champ).length} campeões, ${Object.keys(matchup).length} matchups, ${Object.keys(duo).length} duplas.`);
+console.log(`Estatísticas salvas: ${Object.keys(champ).length} campeões, ${Object.keys(matchup).length} matchups, ${Object.keys(duo).length} duplas, `
+  + `${Object.keys(pairs).length} pares do mesmo time, ${Object.keys(vs).length} confrontos entre rotas.`);

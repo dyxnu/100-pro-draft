@@ -1,6 +1,6 @@
 // Modelo de confronto: counters, sinergias, composição e estratégias.
 import type { Role } from '@/lib/auction/engine';
-import { duoWinrate, laneMatchup } from '@/lib/champions/riot';
+import { duoWinrate, laneMatchup, pairSynergy, versusEdge } from '@/lib/champions/riot';
 import type { ChampClass, ChampionCard } from '@/lib/champions/cards';
 
 // ---------------------------------------------------------------------------
@@ -67,16 +67,41 @@ export const SPECIFIC_COUNTERS: Record<string, string[]> = {
   Kaisa: ['Caitlyn', 'Ashe'],
 };
 
-/** Vantagem de A sobre B (≈ −4 a +4). Na mesma rota, usa o matchup real de alto elo quando há amostra. */
+const clamp = (x: number, lo: number, hi: number) => Math.max(lo, Math.min(hi, x));
+// Escala dos dados reais: 1 ponto percentual de winrate além do esperado ≈ 0,3 de vantagem.
+const REAL_VS_SCALE = 30;
+const REAL_PAIR_SCALE = 25;
+
+/**
+ * Vantagem de A sobre B (≈ −4 a +4). Na mesma rota, usa o matchup real de alto elo quando há
+ * amostra; em rotas diferentes (sem `role`), o confronto real entre os dois quando há amostra.
+ */
 export function matchupEdge(a: ChampionCard, b: ChampionCard, role?: Role): number {
   if (role) {
     const real = laneMatchup(a.id, b.id, role);
-    if (real) return Math.max(-4, Math.min(4, (real.wr - 0.5) * 40));
+    if (real) return clamp((real.wr - 0.5) * 40, -4, 4);
   }
   let edge = classEdge(a.champClass, b.champClass);
   if (SPECIFIC_COUNTERS[a.id]?.includes(b.id)) edge += 2;
   if (SPECIFIC_COUNTERS[b.id]?.includes(a.id)) edge -= 2;
-  return edge;
+  return role ? edge : blendReal(edge, versusEdge(a.id, b.id), 3);
+}
+
+/**
+ * Mistura a estimativa (classes/counters conhecidos) com o confronto real: a estimativa é o
+ * "palpite inicial" e a amostra real vai tomando o lugar dela conforme cresce (bayesiano).
+ */
+function blendReal(guess: number, real: { delta: number; weight: number } | null, cap: number) {
+  if (!real) return guess;
+  return clamp(guess * (1 - real.weight) + real.delta * REAL_VS_SCALE, -cap, cap);
+}
+
+/**
+ * Counter "geral" entre dois campeões de rotas diferentes, na escala de `classEdge` (−2 a +2):
+ * tabela de classes corrigida pelo confronto real de alto elo quando há amostra.
+ */
+export function crossEdge(a: ChampionCard, b: ChampionCard): number {
+  return blendReal(classEdge(a.champClass, b.champClass), versusEdge(a.id, b.id), 2);
 }
 
 // ---------------------------------------------------------------------------
@@ -132,6 +157,22 @@ export function teamProfile(cards: Record<Role, ChampionCard>): TeamProfile {
   const duoBonus = duo ? Math.max(-2, Math.min(3, (duo.wr - 0.5) * 30)) : 0;
   const labels = syn.map(s => `${s.label} (${s.pair.join(' + ')})`);
   if (duo) labels.push(`Dupla do bot: ${(duo.wr * 100).toFixed(1)}% de vitórias em ${duo.games} partidas`);
+  // Outros pares do time (selva + meio, selva + topo, meio + suporte…): sinergia ou antissinergia
+  // real de alto elo, além do que cada um rende sozinho. Pares já curados acima não contam duas vezes.
+  let pairBonus = 0;
+  const roles = Object.keys(cards) as Role[];
+  for (let i = 0; i < roles.length; i++) for (let j = i + 1; j < roles.length; j++) {
+    const x = cards[roles[i]], y = cards[roles[j]];
+    const isBotDuo = (roles[i] === 'ADC' && roles[j] === 'SUPORTE') || (roles[i] === 'SUPORTE' && roles[j] === 'ADC');
+    if (isBotDuo && duo) continue;
+    if (syn.some(s => s.pair.includes(x.id) && s.pair.includes(y.id))) continue;
+    const real = pairSynergy(x.id, y.id);
+    if (!real) continue;
+    const b = clamp(real.delta * REAL_PAIR_SCALE, -1.5, 1.5);
+    pairBonus += b;
+    if (Math.abs(b) >= 0.3) labels.push(`${b > 0 ? 'Sinergia' : 'Antissinergia'} real: ${x.name} + ${y.name} (${(real.wr * 100).toFixed(0)}% em ${real.games} partidas)`);
+  }
+  pairBonus = clamp(pairBonus, -3, 3);
   // Composição: times sem tanque, só com um tipo de dano ou sem iniciação sofrem em partidas reais.
   const compIssues: string[] = [];
   let comp = 0;
@@ -145,7 +186,7 @@ export function teamProfile(cards: Record<Role, ChampionCard>): TeamProfile {
   if (avg(c => c.attrs.CTR) < 58) { comp -= 0.5; compIssues.push('pouco controle'); }
   return {
     comp, compIssues,
-    synergy: syn.reduce((a, s) => a + s.bonus, 0) + duoBonus,
+    synergy: syn.reduce((a, s) => a + s.bonus, 0) + duoBonus + pairBonus,
     synergyLabels: labels,
     engage: Math.max(...list.map(c => c.engage)),
     frontline: list.filter(c => c.attrs.DEF >= 70).length,

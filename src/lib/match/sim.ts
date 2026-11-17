@@ -2,7 +2,7 @@
 // todos assistem exatamente o mesmo jogo). Tempo em segundos de jogo.
 import { ROLES, type Role } from '@/lib/auction/engine';
 import type { ChampionCard } from '@/lib/champions/cards';
-import { type Strategy, type TeamProfile, classEdge, matchupEdge, styleFit, teamProfile } from './model';
+import { type Strategy, type TeamProfile, classEdge, crossEdge, matchupEdge, styleFit, teamProfile } from './model';
 import {
   type Lane, type Pt, type Side, BARON_PIT, DRAGON_PIT, LANES, NEXUS,
   alongLane, inhibPos, nexusTowerPos, towerPos,
@@ -59,7 +59,7 @@ const AGGR = { defensiva: 0.75, equilibrada: 1, agressiva: 1.35 } as const;
 const RISK = { conservador: 0.65, normal: 1, arriscado: 1.5 } as const;
 const sigmoid = (x: number) => 1 / (1 + Math.exp(-x));
 const OVR_PIVOT = 75;
-const OVR_WEIGHT = 0.65;
+const OVR_WEIGHT = 0.75;
 const W_CLASS = 0.2;
 const W_SYNERGY = 1.2;
 const W_COMP = 1.2;
@@ -129,7 +129,7 @@ export function simulateMatch(a: MatchTeam, b: MatchTeam, seed: number, opts: Si
     const c = card(k);
     const m = t / 60;
     const curve = m < 14 ? lerp(c.curve.early, c.curve.mid, m / 14) : lerp(c.curve.mid, c.curve.late, (m - 14) / 12);
-    // O overall pesa, mas comprimido: a diferença entre cartas conta ~55% do valor bruto,
+    // O overall pesa, mas comprimido: a diferença entre cartas conta ~75% do valor bruto,
     // para que counters, sinergia, composição e tática decidam mais partidas.
     const ovr = c.ovr[k.slice(2) as Role];
     return (OVR_PIVOT + (ovr - OVR_PIVOT) * OVR_WEIGHT) * (0.85 + curve * 0.03);
@@ -138,7 +138,7 @@ export function simulateMatch(a: MatchTeam, b: MatchTeam, seed: number, opts: Si
   function teamClassEdge(s: Side) {
     if (!classEdgeCache) {
       let e = 0;
-      for (const ra of ROLES) for (const rb of ROLES) e += classEdge(a.cards[ra].champClass, b.cards[rb].champClass);
+      for (const ra of ROLES) for (const rb of ROLES) e += pairEdge(a.cards[ra], b.cards[rb], ra === rb);
       classEdgeCache = [e, -e];
     }
     return classEdgeCache[s];
@@ -444,6 +444,9 @@ export function simulateMatch(a: MatchTeam, b: MatchTeam, seed: number, opts: Si
   };
 }
 
+/** Counter entre dois campeões de times opostos: na mesma rota, a classe (o matchup real entra na rota); em rotas diferentes, o confronto real quando há amostra. */
+const pairEdge = (x: ChampionCard, y: ChampionCard, sameRole: boolean) => (sameRole ? classEdge(x.champClass, y.champClass) : crossEdge(x, y));
+
 const score = (p: PlayerStats) => p.kills * 3 + p.assists * 1.5 - p.deaths;
 
 /**
@@ -465,7 +468,7 @@ export function preMatchChance(a: MatchTeam, b: MatchTeam): number {
   const pa = teamProfile(a.cards), pb = teamProfile(b.cards);
   const base = (t: MatchTeam) => ROLES.reduce((s, r) => s + OVR_PIVOT + (t.cards[r].ovr[r] - OVR_PIVOT) * OVR_WEIGHT, 0) / 5;
   let edge = 0;
-  for (const ra of ROLES) for (const rb of ROLES) edge += classEdge(a.cards[ra].champClass, b.cards[rb].champClass) * (W_CLASS / 0.2);
+  for (const ra of ROLES) for (const rb of ROLES) edge += pairEdge(a.cards[ra], b.cards[rb], ra === rb) * (W_CLASS / 0.2);
   for (const r of ROLES) edge += matchupEdge(a.cards[r], b.cards[r], r) * 0.5;
   const x = (base(a) * styleFit(pa, a.strategy) - base(b) * styleFit(pb, b.strategy)) + (pa.synergy - pb.synergy) * W_SYNERGY
     + (pa.comp - pb.comp) * W_COMP + edge * 0.2;
