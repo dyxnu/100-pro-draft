@@ -39,10 +39,11 @@ const SKIN_ITEMS: StoreItem[] = Object.entries(SKINS).flatMap(([champId, list]) 
 })));
 
 // Ícones de perfil do LoL (Data Dragon). 0–28: grátis para todos. Os demais, à venda.
+// Conferidos com HEAD em profileIconUrl (versão 16.22.1); o 5790 não existia e saiu.
 export const FREE_ICONS = Array.from({ length: 29 }, (_, i) => i);
 const SHOP_ICON_IDS = [
   588, 590, 744, 785, 1105, 1211, 1301, 1385, 1442, 1588, 1628, 3150, 3379, 3502, 3797, 4022, 4219, 4568, 4644, 4834,
-  4900, 5021, 5142, 5340, 5384, 5455, 5562, 5698, 5790, 5888, 6017, 6270, 6345, 6521, 6631, 6743,
+  4900, 5021, 5142, 5340, 5384, 5455, 5562, 5698, 5888, 6017, 6270, 6345, 6521, 6631, 6743,
 ];
 const ICON_ITEMS: StoreItem[] = SHOP_ICON_IDS.map((id, i) => ({
   id: `icon:${id}`, kind: 'icon' as const, name: `Ícone #${id}`, price: i % 3 === 0 ? 1_200 : 750, rarity: i % 3 === 0 ? 'rara' : 'comum',
