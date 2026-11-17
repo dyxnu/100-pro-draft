@@ -40,9 +40,12 @@ yarn-error.log*
 *.tsbuildinfo
 next-env.d.ts
 
-# exemplo de variáveis pode ir para o Git
+# exemplo de variï¿½veis pode ir para o Git
 !.env.example
 
 # cache da coleta da API da Riot
 .riot-cache/
 .riot-cache-log.txt
+
+.vercel
+.env*
