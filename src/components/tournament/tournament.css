@@ -85,3 +85,17 @@
 .champion h2 { animation: bump .6s ease-out; }
 .tour-head h1 { color: var(--color-gold2); font-weight: 900; }
 .comp-warn { margin: -4px 0 12px; padding: 8px 10px; border-radius: 10px; font-size: 12px; background: rgba(210, 63, 92, .08); color: var(--color-danger); border: 1px solid rgba(210, 63, 92, .3); }
+
+/* escolher partida para assistir */
+.watch-pick { display: flex; flex-direction: column; gap: 8px; margin-bottom: 12px; }
+.watch-pick > span { font-size: 13px; font-weight: 800; color: var(--color-gold2); }
+.watch-pick .match-tabs button { background: var(--color-panel); font-weight: 700; }
+.watch-pick .match-tabs button.on { background: var(--color-accent); color: #fff; border-color: var(--color-accent); }
+
+/* aviso de eliminação */
+.out-overlay { position: fixed; inset: 0; z-index: 45; display: grid; place-items: center; padding: 16px; background: rgba(20, 23, 56, .55); backdrop-filter: blur(3px); animation: fadeUp .25s ease-out both; }
+.out-card { width: min(420px, 100%); padding: 26px 24px; border-radius: 22px; text-align: center; background: var(--color-panel); box-shadow: 0 30px 60px -20px rgba(20, 23, 56, .7); animation: lotReveal .35s ease-out both; }
+.out-icon { font-size: 44px; }
+.out-card h2 { margin-top: 6px; font-size: 24px; font-weight: 900; color: var(--color-gold2); }
+.out-card p { margin-top: 6px; color: var(--color-muted); font-size: 14px; }
+.out-actions { display: flex; justify-content: center; gap: 10px; margin-top: 18px; }

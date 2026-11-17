@@ -5,7 +5,6 @@ import Link from 'next/link';
 import { ROLES, type AuctionState, type Role } from '@/lib/auction/engine';
 import type { ClientAction } from '@/lib/rooms/types';
 import { STRATEGY_OPTIONS, type Strategy, teamProfile } from '@/lib/match/model';
-import { estimateWinChance } from '@/lib/match/sim';
 import {
   type TMatch, type TeamEntry, type TournamentState,
   matchResult, matchTeam, playingMatchOf, roundMatches, teamCards, teamRating,
@@ -34,6 +33,10 @@ export function TournamentView({ s, t, me, act, pending, serverTime, auctionSumm
   const live = roundMatches(t).filter(m => m.a && m.b);
   const [watchId, setWatchId] = useState<string | null>(null);
   const watched = live.find(m => m.id === watchId) ?? (myMatch?.a && myMatch?.b ? myMatch : live[0]) ?? null;
+  const out = !!myTeam?.eliminated;
+  // Aviso de eliminação: aparece uma vez por campeonato (até clicar em OK ou Assistir).
+  const [outSeen, setOutSeen] = useState(false);
+  const lostTo = out && me ? lastLossOf(t, me) : null;
 
   return (
     <div className="nx-tour">
@@ -54,17 +57,22 @@ export function TournamentView({ s, t, me, act, pending, serverTime, auctionSumm
           ? <LineupStage s={s} t={t} me={me!} match={myMatch} act={act} pending={pending} />
           : <p className="panel-t muted">Você é cabeça de chave e folga nesta rodada. Aguarde os outros jogos.</p>
       )}
-      {t.stage === 'lineup' && myTeam?.eliminated && <p className="panel-t muted">Seu time foi eliminado. Você pode acompanhar as próximas partidas.</p>}
+      {t.stage === 'lineup' && out && (
+        <p className="panel-t muted">Seu time foi eliminado. Quando a próxima rodada começar, escolha uma partida para assistir.</p>
+      )}
 
       {t.stage === 'playing' && watched && (
         <section className="watch">
-          {live.length > 1 && (
-            <div className="match-tabs">
-              {live.map(m => (
-                <button key={m.id} className={m.id === watched.id ? 'on' : ''} onClick={() => setWatchId(m.id)}>
-                  {t.teams[m.a!].name} x {t.teams[m.b!].name}{(m.a === me || m.b === me) ? ' (você)' : ''}
-                </button>
-              ))}
+          {(live.length > 1 || out) && (
+            <div className="watch-pick">
+              <span>{out ? 'Escolha qual partida assistir:' : 'Partidas da rodada:'}</span>
+              <div className="match-tabs">
+                {live.map(m => (
+                  <button key={m.id} className={m.id === watched.id ? 'on' : ''} onClick={() => setWatchId(m.id)}>
+                    👁 {t.teams[m.a!].name} x {t.teams[m.b!].name}{(m.a === me || m.b === me) ? ' (você)' : ''}
+                  </button>
+                ))}
+              </div>
             </div>
           )}
           <LiveMatch s={s} t={t} m={watched} me={me} act={act} pending={pending} serverTime={serverTime} />
@@ -72,8 +80,30 @@ export function TournamentView({ s, t, me, act, pending, serverTime, auctionSumm
       )}
 
       <details className="summary"><summary>Resumo do leilão</summary>{auctionSummary}</details>
+
+      {out && !outSeen && t.stage !== 'done' && (
+        <div className="out-overlay" role="dialog" aria-modal="true">
+          <div className="out-card">
+            <div className="out-icon">🌘</div>
+            <h2>Seu time foi eliminado</h2>
+            <p>{lostTo ? <>Derrota para <b>{lostTo}</b>. </> : null}O campeonato continua: você pode assistir às próximas partidas ao vivo.</p>
+            <div className="out-actions">
+              <button className="btn-secondary" onClick={() => setOutSeen(true)}>OK</button>
+              <button className="btn-primary" onClick={() => { setOutSeen(true); setTimeout(() => document.querySelector('.watch, .bracket')?.scrollIntoView({ behavior: 'smooth' }), 50); }}>
+                👁 Assistir partidas
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
+}
+
+/** Nome de quem eliminou o jogador (última partida dele que terminou em derrota). */
+function lastLossOf(t: TournamentState, me: string): string | null {
+  const m = [...t.matches].reverse().find(x => (x.a === me || x.b === me) && x.winner && x.winner !== me);
+  return m ? t.teams[m.winner!].name : null;
 }
 
 // ---------------------------------------------------------------------------
@@ -147,10 +177,6 @@ function LineupStage({ s, t, me, match, act, pending }: {
   const opp = t.teams[oppId];
   const [sel, setSel] = useState<Role | null>(null);
   const cards = useMemo(() => teamCards(team, s.champions), [team, s.champions]);
-  const chance = useMemo(() => {
-    const mine = matchTeam(team, s.champions), theirs = matchTeam(opp, s.champions);
-    return estimateWinChance(mine, theirs);
-  }, [team, opp, s.champions]);
   const issues = useMemo(() => teamProfile(matchTeam(team, s.champions).cards).compIssues, [team, s.champions]);
   const playing = roundMatches(t).flatMap(m => (m.a && m.b ? [m.a, m.b] : []));
   const readyCount = playing.filter(id => t.teams[id].ready).length;
@@ -195,12 +221,6 @@ function LineupStage({ s, t, me, match, act, pending }: {
               <span>{s.champions[opp.lineup[r]].name}</span>
             </div>
           ))}
-        </div>
-        <div className="chance">
-          <span>Sua chance prevista</span>
-          <b className={chance >= 0.5 ? 'good' : 'bad'}>{Math.round(chance * 100)}%</b>
-          <div className="bar"><span style={{ width: `${chance * 100}%` }} /></div>
-          <small>Muda com a escalação e a estratégia. Zebra acontece.</small>
         </div>
         {issues.length > 0 && (
           <p className="comp-warn">⚠ Composição: {issues.join(', ')}. Times assim rendem menos em batalha.</p>

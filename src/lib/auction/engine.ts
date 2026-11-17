@@ -143,8 +143,12 @@ export const getPlayer = (s: AuctionState, id: string) => s.players.find(p => p.
 export const openRoles = (p: Player): Role[] => ROLES.filter(r => !p.roster[r]);
 const allFull = (s: AuctionState) => s.players.every(p => openRoles(p).length === 0);
 
+/** Eventos recentes guardados no estado (o estado vai e volta a cada lance: precisa ficar pequeno). */
+const MAX_EVENTS = 40;
+
 function emit(s: AuctionState, event: AuctionEvent) {
   s.events.push(event);
+  if (s.events.length > MAX_EVENTS) s.events.splice(0, s.events.length - MAX_EVENTS);
   s.version++;
 }
 

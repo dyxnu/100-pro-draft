@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import Link from 'next/link';
-import { ROLES, type AuctionState, formatBRL as fmt, getPlayer } from '@/lib/auction/engine';
+import { ROLES, type AuctionState, formatBRL as fmt, getPlayer, passLot, placeBid } from '@/lib/auction/engine';
 import type { ActionResponse, ClientAction } from '@/lib/rooms/types';
 import { seatPlayerId } from '@/lib/rooms/types';
 import { authRealtime, getBrowserClient } from '@/lib/supabase/client';
@@ -56,10 +56,16 @@ export function AuctionView({ code, roomId, initialState, initialTournament, ini
     }
     const t1 = Date.now();
     if (t1 - t0 < 1500) offset.current = data.serverNow - (t0 + t1) / 2;
-    if (data.state) apply(data.state, data.tournament ?? null, data.nextTickAt ?? null);
+    if (data.state) {
+      apply(data.state, data.tournament ?? null, data.nextTickAt ?? null);
+      if (data.ok && action.type !== 'tick') {
+        void live.current?.send({ type: 'broadcast', event: 'snap', payload: { state: data.state, tournament: data.tournament ?? null, nextTickAt: data.nextTickAt ?? null } });
+      }
+    }
     return data;
   }, [code, apply, serverTime]);
 
+  const live = useRef<ReturnType<ReturnType<typeof getBrowserClient>['channel']> | null>(null);
   // Tempo real: cada gravação do servidor chega para todos da sala.
   useEffect(() => {
     const sb = getBrowserClient();
@@ -67,7 +73,14 @@ export function AuctionView({ code, roomId, initialState, initialTournament, ini
     let ch: ReturnType<typeof sb.channel> | null = null;
     void authRealtime().then(() => {
       if (cancelled) return;
-      ch = sb.channel(`leilao:${roomId}`)
+      ch = sb.channel(`leilao:${roomId}`, { config: { broadcast: { self: false } } })
+      // Caminho rápido: quem agiu repassa o estado novo direto pela conexão ao vivo (sem esperar o banco).
+      .on('broadcast', { event: 'snap' }, (msg: { payload: { state: AuctionState; tournament: TournamentState | null; nextTickAt: number | null } }) => {
+        const p = msg.payload;
+        if (!p?.state) return;
+        setSnap(prev => (versionOf(p.state, p.tournament) >= versionOf(prev.state, prev.tournament)
+          ? { state: p.state, tournament: p.tournament ?? prev.tournament, nextTickAt: p.nextTickAt } : prev));
+      })
       .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'auctions', filter: `room_id=eq.${roomId}` }, (p: { new: unknown }) => {
         // Colunas grandes que não mudaram podem vir vazias na mensagem: aproveita o que já temos.
         const row = p.new as { state?: AuctionState | null; tournament?: TournamentState | null; next_tick_at?: string | null };
@@ -79,8 +92,9 @@ export function AuctionView({ code, roomId, initialState, initialTournament, ini
         });
       })
       .subscribe();
+      live.current = ch;
     });
-    return () => { cancelled = true; if (ch) sb.removeChannel(ch); };
+    return () => { cancelled = true; live.current = null; if (ch) sb.removeChannel(ch); };
   }, [roomId]);
 
   // "Cutucada" no relógio do servidor quando um prazo vence (fim de lote, vez dos bots...).
@@ -100,9 +114,19 @@ export function AuctionView({ code, roomId, initialState, initialTournament, ini
   }, [done, me, send]);
 
   const act = async (action: ClientAction) => {
-    setPending(true);
+    // Lance e passe aparecem na hora (aplicados localmente com o mesmo motor do servidor);
+    // a resposta do servidor confirma ou corrige logo em seguida.
+    if (me && (action.type === 'bid' || action.type === 'pass')) {
+      setSnap(prev => {
+        const next = structuredClone(prev.state);
+        const r = action.type === 'bid' ? placeBid(next, me, action.amount, serverTime()) : passLot(next, me, serverTime());
+        return r.ok ? { ...prev, state: next } : prev;
+      });
+    } else setPending(true);
     const r = await send(action);
     setPending(false);
+    // Recusado: desfaz o otimista usando o estado do servidor, mesmo que a versão seja menor.
+    if (!r.ok && r.state) setSnap(prev => ({ state: r.state!, tournament: r.tournament ?? prev.tournament, nextTickAt: r.nextTickAt ?? prev.nextTickAt }));
     if (!r.ok && r.reason) {
       setToast(r.reason);
       setTimeout(() => setToast(null), 2500);

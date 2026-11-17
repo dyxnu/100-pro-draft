@@ -14,7 +14,9 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
   if (!isAdminConfigured) return NextResponse.json({ ok: false, reason: 'Servidor sem chave secreta.', serverNow: now }, { status: 503 });
 
   const supabase = await createClient();
-  const { data: { user } } = await supabase.auth.getUser();
+  // getClaims valida o token sem ir ao servidor de login quando possível (menos atraso por lance).
+  const { data: claims } = await supabase.auth.getClaims();
+  const user = claims?.claims?.sub ? { id: claims.claims.sub } : null;
   if (!user) return NextResponse.json({ ok: false, reason: 'Faça login.', serverNow: now }, { status: 401 });
 
   let body: unknown;

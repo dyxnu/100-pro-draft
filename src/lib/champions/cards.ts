@@ -65,6 +65,34 @@ export const CURATED: Record<string, Curated> = {
   Nami:        { cc: 8, dashes: 0, util: 9, early: 7, mid: 7, late: 7, engage: 5, aoe: 5 },
   Blitzcrank:  { cc: 8, dashes: 0, util: 5, early: 8, mid: 6, late: 5, engage: 8, aoe: 2 },
   Diana:       { cc: 5, dashes: 1, util: 1, early: 6, mid: 8, late: 7, engage: 8, aoe: 8 },
+  Aatrox:      { cc: 5, dashes: 2, util: 1, early: 7, mid: 8, late: 6, engage: 6, aoe: 6 },
+  Ornn:        { cc: 8, dashes: 1, util: 4, early: 5, mid: 7, late: 9, engage: 8, aoe: 7 },
+  Teemo:       { cc: 3, dashes: 0, util: 2, early: 7, mid: 7, late: 6, engage: 1, aoe: 4 },
+  Riven:       { cc: 5, dashes: 3, util: 0, early: 7, mid: 8, late: 6, engage: 6, aoe: 5 },
+  Irelia:      { cc: 5, dashes: 3, util: 0, early: 7, mid: 8, late: 7, engage: 6, aoe: 4 },
+  Mordekaiser: { cc: 4, dashes: 0, util: 1, early: 6, mid: 8, late: 7, engage: 4, aoe: 4 },
+  Hecarim:     { cc: 6, dashes: 2, util: 1, early: 6, mid: 8, late: 7, engage: 9, aoe: 6 },
+  Kayn:        { cc: 4, dashes: 3, util: 0, early: 5, mid: 8, late: 8, engage: 6, aoe: 4 },
+  Khazix:      { cc: 1, dashes: 3, util: 0, early: 7, mid: 9, late: 7, engage: 4, aoe: 2 },
+  Nidalee:     { cc: 2, dashes: 3, util: 3, early: 8, mid: 7, late: 5, engage: 3, aoe: 3 },
+  Viego:       { cc: 3, dashes: 2, util: 0, early: 6, mid: 8, late: 8, engage: 5, aoe: 4 },
+  Gragas:      { cc: 7, dashes: 1, util: 2, early: 6, mid: 8, late: 6, engage: 8, aoe: 7 },
+  Leblanc:     { cc: 5, dashes: 3, util: 0, early: 8, mid: 8, late: 5, engage: 4, aoe: 3 },
+  Sylas:       { cc: 5, dashes: 2, util: 1, early: 6, mid: 8, late: 8, engage: 6, aoe: 6 },
+  TwistedFate: { cc: 6, dashes: 0, util: 4, early: 6, mid: 8, late: 7, engage: 5, aoe: 3 },
+  Veigar:      { cc: 8, dashes: 0, util: 1, early: 4, mid: 7, late: 10, engage: 5, aoe: 7 },
+  Yone:        { cc: 5, dashes: 3, util: 0, early: 5, mid: 8, late: 9, engage: 6, aoe: 5 },
+  Akali:       { cc: 2, dashes: 3, util: 0, early: 6, mid: 9, late: 7, engage: 5, aoe: 3 },
+  Lucian:      { cc: 1, dashes: 2, util: 0, early: 8, mid: 8, late: 6, engage: 2, aoe: 3 },
+  Draven:      { cc: 3, dashes: 0, util: 0, early: 9, mid: 8, late: 6, engage: 2, aoe: 2 },
+  Tristana:    { cc: 3, dashes: 2, util: 0, early: 6, mid: 8, late: 8, engage: 3, aoe: 3 },
+  Xayah:       { cc: 5, dashes: 0, util: 1, early: 6, mid: 8, late: 8, engage: 2, aoe: 4 },
+  Samira:      { cc: 3, dashes: 2, util: 0, early: 6, mid: 8, late: 8, engage: 5, aoe: 7 },
+  Pyke:        { cc: 8, dashes: 2, util: 2, early: 8, mid: 8, late: 5, engage: 8, aoe: 3 },
+  Braum:       { cc: 8, dashes: 1, util: 7, early: 6, mid: 7, late: 7, engage: 6, aoe: 5 },
+  Rakan:       { cc: 8, dashes: 3, util: 6, early: 6, mid: 8, late: 7, engage: 9, aoe: 6 },
+  Karma:       { cc: 5, dashes: 0, util: 8, early: 8, mid: 7, late: 6, engage: 3, aoe: 5 },
+  Senna:       { cc: 5, dashes: 0, util: 7, early: 6, mid: 7, late: 9, engage: 2, aoe: 4 },
 };
 
 const DEFAULT_CURATED: Curated = { cc: 5, dashes: 1, util: 3, early: 6, mid: 7, late: 6, engage: 4, aoe: 4 };
@@ -147,7 +175,7 @@ export function buildCard(id: string, routes: Role[]): ChampionCard {
 
   return {
     id, name: d.name, title: d.title,
-    champClass: classOf(d.tags, m?.roles ?? []),
+    champClass: classOf(d.tags, m?.roles ?? [], id),
     tags: d.tags, attrs, curve, engage: c.engage, aoe: c.aoe,
     ranged: d.stats.range >= 300, difficulty: d.info.difficulty,
     ovr, bestOvr: Math.max(...Object.values(ovr)), patch: DATA.version,
@@ -158,7 +186,13 @@ export function buildCard(id: string, routes: Role[]): ChampionCard {
 }
 
 // Classe dos counters: a classe oficial do Data Dragon, corrigida pelo Meraki só nos casos claros.
-function classOf(tags: string[], roles: string[]): ChampClass {
+// Casos em que as regras abaixo erram a classe de combate (ex.: Twisted Fate não é atirador).
+const CLASS_OVERRIDE: Record<string, ChampClass> = {
+  TwistedFate: 'mago', Teemo: 'mago', Senna: 'encantador', Sylas: 'lutador', Pyke: 'assassino',
+};
+
+function classOf(tags: string[], roles: string[], id = ''): ChampClass {
+  if (CLASS_OVERRIDE[id]) return CLASS_OVERRIDE[id];
   if (roles.includes('MARKSMAN')) return 'atirador';
   if (roles.includes('ENCHANTER')) return 'encantador';
   if (roles.includes('VANGUARD') || roles.includes('WARDEN')) return 'tanque';
@@ -177,6 +211,12 @@ const PRIMARY_ROLE: Record<string, string> = {
   Jhin: 'MARKSMAN', Ezreal: 'MARKSMAN', Vayne: 'MARKSMAN', Graves: 'SPECIALIST',
   Soraka: 'ENCHANTER', Lulu: 'ENCHANTER', Nami: 'ENCHANTER',
   Morgana: 'CATCHER', Thresh: 'CATCHER', Blitzcrank: 'CATCHER',
+  Aatrox: 'JUGGERNAUT', Ornn: 'VANGUARD', Teemo: 'SPECIALIST', Riven: 'SKIRMISHER', Irelia: 'DIVER',
+  Mordekaiser: 'JUGGERNAUT', Hecarim: 'DIVER', Kayn: 'SKIRMISHER', Khazix: 'ASSASSIN', Nidalee: 'SPECIALIST',
+  Viego: 'SKIRMISHER', Gragas: 'VANGUARD', Leblanc: 'ASSASSIN', Sylas: 'SKIRMISHER', TwistedFate: 'BURST',
+  Veigar: 'BURST', Yone: 'ASSASSIN', Akali: 'ASSASSIN', Lucian: 'MARKSMAN', Draven: 'MARKSMAN',
+  Tristana: 'MARKSMAN', Xayah: 'MARKSMAN', Samira: 'MARKSMAN', Pyke: 'CATCHER', Braum: 'WARDEN',
+  Rakan: 'ENCHANTER', Karma: 'ENCHANTER', Senna: 'ENCHANTER',
 };
 // Funções genéricas só aparecem se não houver nada mais específico.
 const GENERIC = new Set(['FIGHTER', 'MAGE', 'SUPPORT', 'TANK']);

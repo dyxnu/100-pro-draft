@@ -16,6 +16,7 @@ import { ChampImg, ROLE_LABEL, ROLE_SHORT, seatColor } from './ui';
 import './stage.css';
 
 const money = (c: number) => fmt(c).replace('R$ ', '');
+type LotResult = Extract<AuctionEvent, { type: 'placed' | 'unsold' }>;
 
 /** Onde cada rota fica no mini-mapa (% da imagem). */
 const ROLE_SPOT: Record<Role, { x: number; y: number }> = {
@@ -35,7 +36,9 @@ export function AuctionStage({ s, me, act, pending, serverTime, code, toast }: {
 }) {
   const cur = s.current;
   const rp = s.routePick;
-  const lastPlaced = [...s.events].reverse().find((e): e is Extract<AuctionEvent, { type: 'placed' }> => e.type === 'placed');
+  // Último resultado de lote: vendido/colocado OU sem comprador (antes só olhava "placed" e mostrava o campeão errado).
+  const lastResult = [...s.events].reverse().find((e): e is LotResult => e.type === 'placed' || e.type === 'unsold');
+  const lastPlaced = lastResult?.type === 'placed' ? lastResult : undefined;
   const mine = me ? getPlayer(s, me) : null;
   const others = s.players.filter(p => p.id !== me);
   useAuctionSounds(s, me);
@@ -60,7 +63,7 @@ export function AuctionStage({ s, me, act, pending, serverTime, code, toast }: {
         </aside>
 
         <section className="pd-center">
-          <LotPanel s={s} me={me} lastPlaced={lastPlaced} now={serverTime} pending={pending} act={act} />
+          <LotPanel s={s} me={me} last={lastResult} now={serverTime} pending={pending} act={act} />
         </section>
 
         <aside className="pd-right">
@@ -85,16 +88,39 @@ function RouteModal({ s, pending, now, onPick }: {
     const id = setInterval(() => setLeft(Math.ceil(Math.max(0, rp.deadline - now()) / 1000)), 200);
     return () => clearInterval(id);
   }, [rp.deadline, now]);
+  const me = getPlayer(s, rp.playerId)!;
   return (
-    <div className="lx-overlay">
-      <div className="lx-modal anim-reveal">
-        <ChampImg id={c.id} name={c.name} className="ic" />
-        <h2>{c.name} é seu!</h2>
-        <p>{rp.price ? `Pago: ${fmt(rp.price)}` : 'De graça'} · escolha a rota em <b>{left}</b> s</p>
-        <div className="opts">
-          {rp.options.map(r => (
-            <button key={r} className="btn-primary" disabled={pending} onClick={() => onPick(r)}>{ROLE_LABEL[r]}</button>
-          ))}
+    <div className="pd-overlay">
+      <div className="pd-route anim-reveal">
+        <div className="pd-route-head">
+          <ChampImg id={c.id} name={c.name} className="ic" />
+          <div>
+            <h2>{c.name} é seu!</h2>
+            <p>{rp.price ? `Pago: ${fmt(rp.price)}` : 'De graça'} · clique na rota no mapa · <b>{left}</b> s</p>
+          </div>
+        </div>
+        {/* Mapa grande: rotas livres brilham e podem ser clicadas */}
+        <div className="pd-rift big">
+          <img src={MINIMAP_URL} alt="" className="map" />
+          {ROLES.map(r => {
+            const slot = me.roster[r];
+            const owned = slot ? s.champions[slot.champId] : null;
+            const at = ROLE_SPOT[r];
+            const can = rp.options.includes(r);
+            return can ? (
+              <button key={r} className="spot pick" style={{ left: `${at.x}%`, top: `${at.y}%` }} disabled={pending} onClick={() => onPick(r)}>
+                <ChampImg id={c.id} name={c.name} className="ic ghost" />
+                <span className="lbl">{ROLE_LABEL[r]}</span>
+              </button>
+            ) : (
+              <div key={r} className={`spot ${owned ? 'filled' : ''}`} style={{ left: `${at.x}%`, top: `${at.y}%` }}>
+                {owned ? <ChampImg id={owned.id} name={owned.name} className="ic" /> : <span className="role">{ROLE_SHORT[r]}</span>}
+              </div>
+            );
+          })}
+        </div>
+        <div className="pd-route-opts">
+          {rp.options.map(r => <button key={r} className="btn-primary" disabled={pending} onClick={() => onPick(r)}>{ROLE_LABEL[r]}</button>)}
         </div>
       </div>
     </div>
@@ -105,9 +131,9 @@ function RouteModal({ s, pending, now, onPick }: {
 // ---------------------------------------------------------------------------
 // Sons do leilão: novo lote, lances, arremate, contagem final.
 function useAuctionSounds(s: AuctionState, me: string | null) {
-  const prev = useRef<{ bids: number; sales: number; lot: number | null; leader: string | null } | null>(null);
+  const prev = useRef<{ bids: number; sales: number; lot: number | null; leader: string | null; passes: number } | null>(null);
   useEffect(() => {
-    const now = { bids: s.bids.length, sales: s.sales.length, lot: s.current?.index ?? null, leader: s.current?.highBid?.playerId ?? null };
+    const now = { bids: s.bids.length, sales: s.sales.length, lot: s.current?.index ?? null, leader: s.current?.highBid?.playerId ?? null, passes: s.current?.passes.length ?? 0 };
     const p = prev.current;
     prev.current = now;
     if (!p) return;
@@ -119,7 +145,7 @@ function useAuctionSounds(s: AuctionState, me: string | null) {
       if (now.leader === me) play('myBid');
       else if (p.leader === me) play('outbid');
       else play('bid');
-    }
+    } else if (now.lot === p.lot && now.passes > p.passes) play('pass');
   }, [s, me]);
 }
 
@@ -223,12 +249,12 @@ function LastSold({ s }: { s: AuctionState }) {
 
 // ---------------------------------------------------------------------------
 // Cartão central
-function LotPanel({ s, me, lastPlaced, now, pending, act }: {
-  s: AuctionState; me: string | null; lastPlaced?: Extract<AuctionEvent, { type: 'placed' }>;
+function LotPanel({ s, me, last, now, pending, act }: {
+  s: AuctionState; me: string | null; last?: LotResult;
   now: () => number; pending: boolean; act: (a: ClientAction) => void;
 }) {
   const cur = s.current, rp = s.routePick;
-  const id = cur?.champId ?? rp?.champId ?? lastPlaced?.champId;
+  const id = cur?.champId ?? rp?.champId ?? last?.champId;
   const champ = id ? s.champions[id] : null;
   const card = useMemo(() => (champ ? buildCard(champ.id, champ.routes) : null), [champ]);
   if (!champ || !card) return <div className="pd-lot empty">Preparando o primeiro campeão…</div>;
@@ -238,46 +264,56 @@ function LotPanel({ s, me, lastPlaced, now, pending, act }: {
   const legendary = show && card.bestOvr >= 84;
   const name = (pid: string) => getPlayer(s, pid)?.name ?? '?';
   const bestRole = [...champ.routes].sort((a, b) => card.ovr[b] - card.ovr[a])[0];
-  const bids = cur ? s.bids.filter(b => b.champId === cur.champId).slice(-3).reverse() : [];
+  const bids = cur ? s.bids.filter(b => b.champId === cur.champId).slice(-2).reverse() : [];
+  const passed = cur ? cur.passes.filter(p => p !== me).map(name) : [];
 
-  let leaderLine: React.ReactNode = null, price = 0;
+  let leaderLine: React.ReactNode = null, price = 0, ribbon: React.ReactNode = null;
   if (cur) {
     price = cur.highBid?.amount ?? s.config.minBid;
     leaderLine = cur.highBid
-      ? <><b style={{ color: seatColor(cur.highBid.playerId) }}>{name(cur.highBid.playerId)}</b> lidera</>
+      ? <><b style={{ color: seatColor(cur.highBid.playerId) }}>{cur.highBid.playerId === me ? 'Você' : name(cur.highBid.playerId)}</b> lidera</>
       : <>Sem lances · abre por {fmt(s.config.minBid)}</>;
   } else if (rp) {
     price = rp.price;
-    leaderLine = <><b style={{ color: seatColor(rp.playerId) }}>{name(rp.playerId)}</b> arrematou e escolhe a rota…</>;
-  } else if (lastPlaced) {
-    price = lastPlaced.price;
-    leaderLine = lastPlaced.via === 'sobra'
-      ? <>Sobra para <b>{name(lastPlaced.playerId)}</b></>
-      : <>Vendido para <b style={{ color: seatColor(lastPlaced.playerId) }}>{name(lastPlaced.playerId)}</b></>;
+    leaderLine = <><b style={{ color: seatColor(rp.playerId) }}>{name(rp.playerId)}</b> escolhe a rota…</>;
+    ribbon = <span className="pd-ribbon sold">Vendido · {name(rp.playerId)}</span>;
+  } else if (last?.type === 'placed' && last.champId === champ.id) {
+    price = last.price;
+    leaderLine = last.via === 'sobra' ? <>Sobra para <b>{name(last.playerId)}</b></> : <>Foi para <b style={{ color: seatColor(last.playerId) }}>{name(last.playerId)}</b></>;
+    ribbon = <span className="pd-ribbon sold">{last.via === 'sobra' ? 'Sobra' : 'Vendido'} · {name(last.playerId)}</span>;
+  } else if (last?.type === 'unsold' && last.champId === champ.id) {
+    leaderLine = <>Ninguém deu lance</>;
+    ribbon = <span className="pd-ribbon unsold">Sem comprador</span>;
   }
 
   return (
-    <div key={champ.id} className={`pd-lot anim-reveal ${legendary ? 'legendary' : ''} ${!cur ? 'sold' : ''}`}>
-      {cur ? <ClockRing endsAt={cur.endsAt} total={s.config.bidTimeMs} now={now} />
-        : rp ? <ClockRing endsAt={rp.deadline} total={s.config.routePickMs} now={now} label="escolhendo rota" />
-        : <div className="pd-sold-stamp">VENDIDO</div>}
-
-      <div className="pd-portrait">
-        {show && <span className="pd-ovr"><b>{card.ovr[bestRole]}</b><small>{ROLE_SHORT[bestRole]}</small></span>}
-        <div className="pd-face"><ChampImg key={champ.id} id={champ.id} name={champ.name} big className="img" /></div>
-        <span className="pd-class">{CLASS_LABEL[card.champClass]}</span>
+    <div className={`pd-lot ${legendary ? 'legendary' : ''} ${!cur ? 'closed' : ''}`}>
+      <div key={`banner-${champ.id}`} className="pd-banner anim-reveal">
+        <img src={`https://ddragon.leagueoflegends.com/cdn/img/champion/centered/${champ.id}_0.jpg`} alt={champ.name} className="splash" />
+        <div className="shade" />
+        <div className="tags">
+          {show && <span className="pd-ovr"><b>{card.ovr[bestRole]}</b><small>{ROLE_SHORT[bestRole]}</small></span>}
+          <span className="pd-class">{CLASS_LABEL[card.champClass]}</span>
+          {legendary && <span className="pd-legend">✦ Lendário</span>}
+        </div>
+        <div className="corner">
+          {cur ? <ClockRing endsAt={cur.endsAt} total={s.config.bidTimeMs} now={now} />
+            : rp ? <ClockRing endsAt={rp.deadline} total={s.config.routePickMs} now={now} label="rota" /> : null}
+        </div>
+        <div className="caption">
+          <h2>{card.name}</h2>
+          <p>{card.title}</p>
+          <div className="pd-chips">
+            {champ.routes.map(r => (
+              <span key={r} className={`chip ${myValid ? (myValid.includes(r) ? 'ok' : 'no') : ''}`} title={myValid && !myValid.includes(r) ? 'Você já tem essa rota' : undefined}>
+                {ROLE_LABEL[r]}{show && <b> {card.ovr[r]}</b>}
+              </span>
+            ))}
+          </div>
+        </div>
+        {ribbon}
       </div>
 
-      <h2 className="pd-name">{card.name}</h2>
-      <p className="pd-title">{card.title}{legendary && <span className="pd-legend">✦ Lendário</span>}</p>
-      <div className="pd-chips">
-        {champ.routes.map(r => (
-          <span key={r} className={`chip ${myValid ? (myValid.includes(r) ? 'ok' : 'no') : ''}`} title={myValid && !myValid.includes(r) ? 'Você já tem essa rota' : undefined}>
-            {ROLE_LABEL[r]}{show && <b> {card.ovr[r]}</b>}
-          </span>
-        ))}
-        {card.roles.slice(0, 2).map(r => <span key={r} className="chip soft">{r}</span>)}
-      </div>
       {show && (
         <div className="pd-attrs">
           {(Object.entries(card.attrs) as [string, number][]).map(([k, v]) => <span key={k}><b>{v}</b>{k}</span>)}
@@ -287,17 +323,15 @@ function LotPanel({ s, me, lastPlaced, now, pending, act }: {
       <div className="pd-price-box">
         <p className="pd-leader">{leaderLine}</p>
         <div key={price} className="pd-price anim-bump">{fmt(price)}</div>
+        {(bids.length > 0 || passed.length > 0) && (
+          <p className="pd-trail">
+            {bids.slice(1).map(b => <span key={b.seq}>{name(b.playerId)} {fmt(b.amount)}</span>)}
+            {passed.length > 0 && <span className="passed">✋ {passed.join(', ')} {passed.length === 1 ? 'passou' : 'passaram'}</span>}
+          </p>
+        )}
       </div>
 
-      {bids.length > 0 && (
-        <div className="pd-bids">
-          {bids.map((b, i) => (
-            <div key={b.seq} className={i === 0 ? 'top' : ''}><span>{name(b.playerId)}</span><b>{fmt(b.amount)}</b></div>
-          ))}
-        </div>
-      )}
-
-      {me && cur && <BidControls key={cur.champId} s={s} me={me} pending={pending} act={act} />}
+      {me && cur && <BidControls key={`ctl-${cur.champId}`} s={s} me={me} pending={pending} act={act} />}
     </div>
   );
 }
@@ -347,7 +381,7 @@ function BidControls({ s, me, pending, act }: { s: AuctionState; me: string; pen
   const [custom, setCustom] = useState('');
 
   const bid = (amount: number) => { act({ type: 'bid', amount }); };
-  const doPass = () => { play('pass'); act({ type: 'pass' }); };
+  const doPass = () => { act({ type: 'pass' }); };
   const customCents = Math.round(Number(custom.replace(',', '.')) * 100);
   const customOk = can && Number.isFinite(customCents) && customCents >= min && customCents <= max;
 
@@ -361,7 +395,7 @@ function BidControls({ s, me, pending, act }: { s: AuctionState; me: string; pen
       const q = st.quick.find(x => x.key === e.key);
       if (q && st.can && q.amount <= st.max) act({ type: 'bid', amount: q.amount });
       else if (e.key.toLowerCase() === 't' && st.can && st.max >= st.min) act({ type: 'bid', amount: st.max });
-      else if (e.key.toLowerCase() === 'p' && !st.passed && !st.leading) { play('pass'); act({ type: 'pass' }); }
+      else if (e.key.toLowerCase() === 'p' && !st.passed && !st.leading) act({ type: 'pass' });
     };
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
