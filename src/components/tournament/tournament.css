@@ -99,3 +99,10 @@
 .out-card h2 { margin-top: 6px; font-size: 24px; font-weight: 900; color: var(--color-gold2); }
 .out-card p { margin-top: 6px; color: var(--color-muted); font-size: 14px; }
 .out-actions { display: flex; justify-content: center; gap: 10px; margin-top: 18px; }
+
+/* Confronto direto na rota (setas, sem porcentagem) */
+.opp-row { grid-template-columns: 64px 30px 1fr auto; }
+.opp-row .lane-edge { font-weight: 900; font-size: 13px; letter-spacing: -1px; min-width: 28px; text-align: center; padding: 1px 6px; border-radius: 8px; }
+.opp-row .lane-edge.up { color: #1f9d55; background: rgba(31, 157, 85, .12); }
+.opp-row .lane-edge.down { color: #d63a4e; background: rgba(214, 58, 78, .12); }
+.opp-row .lane-edge.even { color: var(--color-muted); background: rgba(127, 127, 127, .1); }

@@ -78,16 +78,62 @@ function jungleBaseline(side: Side, until: number): Key[] {
 
 function sample(keys: Key[], t: number): Pt {
   if (t <= keys[0].t) return keys[0].at;
-  for (let i = 1; i < keys.length; i++) {
-    const a = keys[i - 1], b = keys[i];
-    if (t <= b.t) return b.dead || b.t === a.t ? b.at : lerpPt(a.at, b.at, (t - a.t) / (b.t - a.t));
+  // Busca binária pelo primeiro ponto com b.t >= t (os tempos nunca diminuem).
+  let lo = 1, hi = keys.length;
+  while (lo < hi) { const mid = (lo + hi) >> 1; if (keys[mid].t >= t) hi = mid; else lo = mid + 1; }
+  if (lo >= keys.length) return keys[keys.length - 1].at;
+  const a = keys[lo - 1], b = keys[lo];
+  return b.dead || b.t === a.t ? b.at : lerpPt(a.at, b.at, (t - a.t) / (b.t - a.t));
+}
+
+/** Primeiro índice de `ts` (crescente) com valor > x (ou >= x, se `orEqual`). */
+function bound(ts: number[], x: number, orEqual: boolean) {
+  let lo = 0, hi = ts.length;
+  while (lo < hi) { const mid = (lo + hi) >> 1; if (orEqual ? ts[mid] >= x : ts[mid] > x) hi = mid; else lo = mid + 1; }
+  return lo;
+}
+
+/**
+ * Consultas rápidas sobre os eventos (torres perdidas até t, próximo lance grande depois de t),
+ * equivalentes a `towersLostAt` e a um `events.find`, mas em O(log n) quando os eventos estão em ordem.
+ */
+function eventIndex(events: MatchEvent[]) {
+  const sorted = events.every((e, i) => i === 0 || e.t >= events[i - 1].t);
+  const towers = events.filter(e => e.type === 'tower' && e.lane);
+  const towerT = towers.map(e => e.t);
+  // Contagem acumulada de torres perdidas por lado e rota depois de cada torre.
+  const cum: Record<Side, Record<Lane, number>>[] = [];
+  const acc: Record<Side, Record<Lane, number>> = { 0: { TOP: 0, MID: 0, BOT: 0 }, 1: { TOP: 0, MID: 0, BOT: 0 } };
+  for (const e of towers) {
+    acc[(1 - e.side) as Side][e.lane!]++;
+    cum.push({ 0: { ...acc[0] }, 1: { ...acc[1] } });
   }
-  return keys[keys.length - 1].at;
+  const ZERO: Record<Side, Record<Lane, number>> = { 0: { TOP: 0, MID: 0, BOT: 0 }, 1: { TOP: 0, MID: 0, BOT: 0 } };
+  const big = events.filter(e => e.type === 'teamfight' || e.type === 'baron' || e.type === 'dragon');
+  const bigT = big.map(e => e.t);
+  return {
+    lostAt(t: number): Record<Side, Record<Lane, number>> {
+      if (!sorted) return towersLostAt(events, t);
+      const n = bound(towerT, t, false);
+      return n === 0 ? ZERO : cum[n - 1];
+    },
+    nextBig(t: number): MatchEvent | undefined {
+      if (!sorted) return big.find(e => e.t >= t);
+      return big[bound(bigT, t, true)];
+    },
+  };
 }
 
 export function buildPaths(events: MatchEvent[], deaths: Record<string, Deaths[]>, splitTop: [boolean, boolean], duration: number): Paths {
   const out: Paths = {};
   const jungle: Record<Side, Key[]> = { 0: jungleBaseline(0, duration + 60), 1: jungleBaseline(1, duration + 60) };
+  const idx = eventIndex(events);
+  const laneOf = new Map<MatchEvent | undefined, Lane>();
+  const nearestLaneOf = (e: MatchEvent | undefined) => {
+    let l = laneOf.get(e);
+    if (!l) { l = nearestLane(e?.at); laneOf.set(e, l); }
+    return l;
+  };
 
   for (const k of ALL_KEYS) {
     const side = Number(k[0]) as Side;
@@ -96,7 +142,7 @@ export function buildPaths(events: MatchEvent[], deaths: Record<string, Deaths[]
 
     // Onde o jogador fica quando não está em nenhum lance.
     const home = (t: number): Pt => {
-      const lost = towersLostAt(events, t);
+      const lost = idx.lostAt(t);
       const laneFront = (lane: Lane) => {
         const f = 0.5 + (lost[1][lane] - lost[0][lane]) * 0.11;
         return alongLane(lane, Math.max(0.1, Math.min(0.9, f + (side === 0 ? -0.035 : 0.035))));
@@ -109,8 +155,8 @@ export function buildPaths(events: MatchEvent[], deaths: Record<string, Deaths[]
         return { x: laneFront(lane).x + j.x * 0.7 + Math.sin(t / 5 + ph) * 1.3, y: laneFront(lane).y + j.y * 0.7 + Math.cos(t / 7 + ph) * 1.1 };
       }
       if (role === 'TOP' && splitTop[side]) return add(laneFront('TOP'), j, 0.5);
-      const next = events.find(e => e.t >= t && (e.type === 'teamfight' || e.type === 'baron' || e.type === 'dragon'));
-      const gather = next?.at === BARON_PIT || next?.at === DRAGON_PIT ? next.at : laneFront(nearestLane(next?.at));
+      const next = idx.nextBig(t);
+      const gather = next?.at === BARON_PIT || next?.at === DRAGON_PIT ? next.at : laneFront(nearestLaneOf(next));
       return add(gather, j, 1.4);
     };
 
@@ -143,14 +189,32 @@ export function buildPaths(events: MatchEvent[], deaths: Record<string, Deaths[]
     let cur: Key = { t: 0, at: FOUNTAIN[side] };
     keys.push(cur);
     // Segue a "casa" de 3 em 3 s entre cur.t e t1, começando de onde está (andando até ela primeiro).
+    // Os passos inteiros a partir do mesmo ponto de partida são sempre iguais, então ficam guardados
+    // (a busca da hora de sair chama isto muitas vezes com o mesmo `from`).
+    let trajFrom: Key | null = null;
+    let trajT: number[] = [], trajP: Pt[] = [];
+    const stepFrom = (t: number, at: Pt, step: number): Pt => {
+      const target = home(t + step);
+      const d = dist(at, target);
+      const reach = CHAMP_SPEED * step;
+      return d <= reach ? target : lerpPt(at, target, reach / d);
+    };
     const walkHome = (from: Key, t1: number, sink?: Key[]): Pt => {
-      let t = from.t, at = from.at;
+      if (trajFrom !== from) { trajFrom = from; trajT = [from.t]; trajP = [from.at]; }
+      // Estende os passos inteiros até onde o laço original chegaria (t1 − t < 3).
+      while (t1 - trajT[trajT.length - 1] >= 3) {
+        const i = trajT.length - 1;
+        trajP.push(stepFrom(trajT[i], trajP[i], 3));
+        trajT.push(trajT[i] + 3);
+      }
+      // Último índice inteiro do caminho: o primeiro com t1 − t < 3.
+      let lo = 0, hi = trajT.length - 1;
+      while (lo < hi) { const mid = (lo + hi) >> 1; if (t1 - trajT[mid] < 3) hi = mid; else lo = mid + 1; }
+      if (sink) for (let i = 1; i <= lo; i++) sink.push({ t: trajT[i], at: trajP[i] });
+      let t = trajT[lo], at = trajP[lo];
       while (t < t1) {
-        const step = Math.min(3, t1 - t);
-        const target = home(t + step);
-        const d = dist(at, target);
-        const reach = CHAMP_SPEED * step;
-        at = d <= reach ? target : lerpPt(at, target, reach / d);
+        const step = t1 - t;
+        at = stepFrom(t, at, step);
         t += step;
         sink?.push({ t, at });
       }
