@@ -1,0 +1,39 @@
+/* Cabeçalho (prefixo st-) */
+.st-wallet {
+  display: inline-flex; align-items: center; padding: 4px 10px; border-radius: 999px;
+  background: linear-gradient(180deg, #eef7ff, #dfeefe); border: 1px solid #bcdaf6; color: #174a9c; font-size: 13px;
+  transition: filter .15s;
+}
+.st-wallet:hover { filter: brightness(1.05); }
+.st-lvl {
+  position: absolute; right: -6px; bottom: -5px; min-width: 18px; height: 15px; padding: 0 4px; border-radius: 8px;
+  display: grid; place-items: center; font-size: 9.5px; font-weight: 900; line-height: 1;
+  background: var(--color-gold2); color: #f6e9c0; border: 1px solid #b48a2f;
+}
+.st-betabadge {
+  display: inline-flex; align-items: center; gap: 6px; padding: 4px 10px; border-radius: 999px; font-size: 12px; font-weight: 900;
+  color: #4a3507; background: linear-gradient(100deg, #f8d877, #fff3c4 45%, #e6b84a); border: 1px solid #c99a2e;
+  box-shadow: 0 0 0 0 rgba(230, 184, 74, .6); animation: stBadgePulse 2.2s ease-in-out infinite;
+}
+@keyframes stBadgePulse { 50% { box-shadow: 0 0 0 5px rgba(230, 184, 74, 0); } }
+.st-navvip { color: #a07a1f; }
+.st-navvip:hover { color: #7a5a10; }
+@media (max-width: 400px) { .st-logo span span:last-child { display: none; } }
+
+.st-menu { position: relative; }
+.st-menu summary {
+  list-style: none; cursor: pointer; width: 36px; height: 34px; border-radius: 10px; border: 1px solid var(--color-line);
+  display: grid; place-content: center; gap: 4px;
+}
+.st-menu summary::-webkit-details-marker { display: none; }
+.st-menu summary span { display: block; width: 16px; height: 2px; border-radius: 2px; background: var(--color-gold2); }
+.st-menu[open] summary { background: var(--color-moon); }
+.st-menu-pop {
+  position: absolute; right: 0; top: calc(100% + 8px); min-width: 180px; padding: 6px; border-radius: 14px; z-index: 30;
+  background: var(--color-panel); border: 1px solid var(--color-line); box-shadow: 0 18px 40px -16px rgba(20, 23, 56, .45);
+  display: flex; flex-direction: column;
+}
+.st-menu-pop a, .st-menu-pop button {
+  text-align: left; width: 100%; padding: 9px 12px; border-radius: 10px; font-weight: 700; color: var(--color-gold2);
+}
+.st-menu-pop a:hover, .st-menu-pop button:hover { background: var(--color-moon); }
