@@ -46,7 +46,10 @@ export function LobbyView({ room, members, meId, isMember, avatars, myAvatar }: 
       if (cancelled) return;
       ch = sb.channel(`sala:${room.id}`, { config: { presence: { key: meId }, broadcast: { self: false } } })
         .on('postgres_changes', { event: '*', schema: 'public', table: 'room_members', filter: `room_id=eq.${room.id}` }, () => router.refresh())
-        .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'rooms', filter: `id=eq.${room.id}` }, () => router.refresh())
+        .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'rooms', filter: `id=eq.${room.id}` }, (p: { new: { status?: string } }) => {
+          if (p.new?.status && p.new.status !== 'lobby') window.location.reload();
+          else router.refresh();
+        })
         .on('broadcast', { event: 'refresh' }, () => router.refresh())
         .on('presence', { event: 'sync' }, () => setOnline(new Set(Object.keys(ch!.presenceState()))))
         .subscribe((status: string) => { if (status === 'SUBSCRIBED') void ch!.track({ at: Date.now() }); });
@@ -164,7 +167,13 @@ export function LobbyView({ room, members, meId, isMember, avatars, myAvatar }: 
                     : waiting.length ? `Aguardando ${waiting.map(w => w.display_name).join(', ')} ficar pronto.`
                     : 'Precisa de pelo menos 2 participantes (ou ligue os bots).'}
                 </p>
-                <button className={`btn-primary lb-big ${canStart ? 'go' : ''}`} disabled={pending || !canStart} onClick={() => run(() => startDraftAction(room.code))}>
+                <button className={`btn-primary lb-big ${canStart ? 'go' : ''}`} disabled={pending || !canStart} onClick={() => startTransition(async () => {
+                  setError(undefined);
+                  const r = await startDraftAction(room.code);
+                  if (r?.error) return setError(r.error);
+                  ping();
+                  window.location.reload(); // abre o leilão do zero, sem trocar a tela por dentro
+                })}>
                   {pending ? 'Aguarde…' : canStart ? '▶ Começar leilão' : `Prontos ${readyCount}/${humans.length}`}
                 </button>
               </>
