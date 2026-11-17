@@ -2,9 +2,13 @@
 
 import { redirect } from 'next/navigation';
 import { revalidatePath } from 'next/cache';
+import { cookies } from 'next/headers';
 import { createClient } from '@/lib/supabase/server';
 import { SITE_URL, isSupabaseConfigured } from '@/lib/supabase/env';
-import { isAvatar } from '@/lib/profile/avatars';
+import { createAdminClient, isAdminConfigured } from '@/lib/supabase/admin';
+import { isOffensive } from '@/lib/moderation/profanity';
+import { canEquip, ownedIconIds, withDefaults } from '@/components/profile/ownership';
+import { loadInventory, ownerCtx } from '@/components/profile/data';
 
 export interface FormState {
   error?: string;
@@ -38,7 +42,12 @@ export async function signUp(_: FormState, form: FormData): Promise<FormState> {
   const next = safeNext(form.get('next'));
 
   if (!USERNAME_RE.test(username)) return { error: 'Nome de usuário: 3 a 16 caracteres, só letras, números e _.' };
+  if (isOffensive(username)) return { error: 'Esse nome não é permitido. Que tal escolher outro, sem palavras ofensivas?' };
   if (password.length < 8) return { error: 'A senha precisa ter pelo menos 8 caracteres.' };
+
+  // Código de convite (a rota de convite grava o cookie). O gatilho do banco registra quem convidou.
+  const rawRef = (await cookies()).get('nx_ref')?.value ?? '';
+  const ref = /^[A-Za-z0-9_-]{4,32}$/.test(rawRef) ? rawRef : null;
 
   const supabase = await createClient();
   const { data: taken } = await supabase.from('profiles').select('id').eq('username', username) /* citext: sem diferenciar maiúsculas */.maybeSingle();
@@ -48,7 +57,7 @@ export async function signUp(_: FormState, form: FormData): Promise<FormState> {
     email,
     password,
     options: {
-      data: { username },
+      data: ref ? { username, ref } : { username },
       emailRedirectTo: `${SITE_URL}/auth/confirm?next=${encodeURIComponent(next)}`,
     },
   });
@@ -100,28 +109,33 @@ export async function updatePassword(_: FormState, form: FormData): Promise<Form
   redirect('/perfil');
 }
 
-export async function updateUsername(_: FormState, form: FormData): Promise<FormState> {
+/**
+ * Troca o ícone do perfil: id de campeão (legado) ou `icon:<id>` (ícone de perfil grátis ou comprado).
+ * Valida a posse e grava com o cliente admin (o navegador não pode mais dar UPDATE em profiles).
+ */
+export async function updateAvatar(iconId: string): Promise<FormState> {
   if (!isSupabaseConfigured) return NOT_CONFIGURED;
-  const username = String(form.get('username') ?? '').trim();
-  if (!USERNAME_RE.test(username)) return { error: 'Nome de usuário: 3 a 16 caracteres, só letras, números e _.' };
+  if (!isAdminConfigured) return { error: 'O servidor ainda não está configurado para salvar o perfil.' };
+  if (typeof iconId !== 'string' || iconId.length > 40) return { error: 'Ícone inválido.' };
   const supabase = await createClient();
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) return { error: 'Sessão expirada. Entre novamente.' };
-  const { error } = await supabase.from('profiles').update({ username }).eq('id', user.id);
-  if (error) return { error: error.code === '23505' ? 'Esse nome de usuário já está em uso.' : 'Não foi possível salvar.' };
-  revalidatePath('/', 'layout');
-  return { message: 'Nome de usuário atualizado.' };
-}
-
-/** Troca o ícone do perfil (id de um campeão do Data Dragon). */
-export async function updateAvatar(champId: string): Promise<FormState> {
-  if (!isSupabaseConfigured) return NOT_CONFIGURED;
-  if (!isAvatar(champId)) return { error: 'Ícone inválido.' };
-  const supabase = await createClient();
-  const { data: { user } } = await supabase.auth.getUser();
-  if (!user) return { error: 'Sessão expirada. Entre novamente.' };
-  const { error } = await supabase.from('profiles').update({ avatar_url: champId }).eq('id', user.id);
+  const admin = createAdminClient();
+  const { data: raw } = await admin.from('profiles').select('*').eq('id', user.id).single();
+  if (!raw) return { error: 'Perfil não encontrado.' };
+  const inventory = await loadInventory(admin, user.id);
+  if (!canEquip('icon', iconId, ownerCtx(withDefaults(raw), inventory))) return { error: 'Você não tem esse ícone.' };
+  const { error } = await admin.from('profiles').update({ avatar_url: iconId }).eq('id', user.id);
   if (error) return { error: 'Não foi possível salvar o ícone.' };
   revalidatePath('/', 'layout');
   return { message: 'Ícone atualizado.' };
+}
+
+/** Ícones de perfil (números) que o usuário logado pode usar: grátis + comprados. */
+export async function listMyIcons(): Promise<number[]> {
+  if (!isSupabaseConfigured) return ownedIconIds(new Set());
+  const supabase = await createClient();
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) return ownedIconIds(new Set());
+  return ownedIconIds(await loadInventory(supabase, user.id));
 }
