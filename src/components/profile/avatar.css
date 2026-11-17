@@ -8,3 +8,7 @@
 .avp-grid button { display: grid; place-items: center; padding: 4px; border-radius: 999px; transition: transform .15s; }
 .avp-grid button:hover { transform: scale(1.08); }
 .avp-grid button.on .nx-avatar { box-shadow: 0 0 0 3px #fff, 0 0 0 6px var(--color-gold); }
+.avp-tabs { display: flex; gap: 6px; padding: 4px; border-radius: 12px; background: var(--color-panel2); border: 1px solid var(--color-line); }
+.avp-tabs button { flex: 1; padding: 7px 10px; border-radius: 9px; font-weight: 700; font-size: 14px; color: var(--color-muted); }
+.avp-tabs button span { margin-left: 4px; font-size: 11px; opacity: .7; }
+.avp-tabs button.on { background: var(--color-panel); color: var(--color-gold2); box-shadow: 0 2px 8px -4px rgba(38, 42, 114, .4); }
