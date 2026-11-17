@@ -85,3 +85,8 @@
 .lb-addbot:hover:not(:disabled) { transform: translateY(-1px); background: #ddd8ff; }
 .lb-status.host { margin-left: 4px; color: #7a6224; background: #fff3c4; }
 .lb-change.danger { color: var(--color-danger); }
+.lb-fill { margin-left: auto; padding: 6px 12px; border-radius: 999px; font-size: 13px; font-weight: 800; color: #fff; background: linear-gradient(#6d63db, #4c4fb5); box-shadow: 0 3px 0 #2b2e7a; transition: filter .15s, transform .1s; }
+.lb-fill:hover:not(:disabled) { filter: brightness(1.1); }
+.lb-fill:active:not(:disabled) { transform: translateY(2px); box-shadow: 0 1px 0 #2b2e7a; }
+.lb-fill:disabled { opacity: .5; }
+@media (max-width: 600px) { .lb-panel-head { flex-wrap: wrap; } .lb-fill { margin-left: 0; } }

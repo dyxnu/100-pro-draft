@@ -173,6 +173,27 @@ export async function addBot(code: string, userId: string): Promise<Result> {
   return { ok: false, reason: 'Alguém entrou agora mesmo. Tente de novo.' };
 }
 
+/** O dono preenche todas as vagas livres com bots de uma vez. */
+export async function fillWithBots(code: string, userId: string): Promise<Result> {
+  const admin = createAdminClient();
+  const room = await getRoom(admin, code);
+  if (!room) return { ok: false, reason: 'Sala não encontrada.' };
+  if (room.host_id !== userId) return { ok: false, reason: 'Só o dono da sala pode adicionar bots.' };
+  if (room.status !== 'lobby') return { ok: false, reason: 'O draft já começou.' };
+  const members = await getMembers(admin, room.id);
+  const free = [...Array(room.max_players).keys()].filter(i => !members.some(m => m.seat === i));
+  if (!free.length) return { ok: false, reason: 'Não há vaga livre.' };
+  const used = new Set(members.map(m => m.display_name));
+  const names = BOT_NAMES.filter(n => !used.has(n));
+  const { error } = await admin.from('room_members').insert(free.map((seat, i) => ({
+    room_id: room.id, seat, user_id: null,
+    bot_profile: BOT_PROFILES[seat % BOT_PROFILES.length],
+    display_name: names[i] ?? `Bot ${seat + 1}`,
+  })));
+  if (error) return { ok: false, reason: error.code === '23505' ? 'Alguém entrou agora mesmo. Tente de novo.' : 'Não foi possível adicionar os bots.' };
+  return { ok: true };
+}
+
 /** O dono tira um bot da sala. */
 export async function removeBot(code: string, userId: string, seat: number): Promise<Result> {
   const admin = createAdminClient();

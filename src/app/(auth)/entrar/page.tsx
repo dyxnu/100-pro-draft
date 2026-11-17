@@ -12,12 +12,12 @@ export default async function EntrarPage({ searchParams }: { searchParams: Promi
     <AuthCard
       title="Entrar"
       subtitle={erro === 'link' ? 'O link expirou ou é inválido. Entre ou peça um novo.' : 'Bem-vindo de volta, invocador.'}
-      footer={<>Ainda não tem conta? <Link href="/cadastro" className="text-gold hover:underline">Criar conta</Link></>}
+      footer={<>Ainda não tem conta? <Link href={next ? `/cadastro?next=${encodeURIComponent(next)}` : '/cadastro'} className="text-gold hover:underline">Criar conta</Link></>}
     >
       <AuthForm
         action={signIn}
         submitLabel="Entrar"
-        hidden={{ next: next ?? '/perfil' }}
+        hidden={{ next: next ?? '/jogar' }}
         fields={[
           { name: 'email', label: 'E-mail', type: 'email', autoComplete: 'email' },
           { name: 'password', label: 'Senha', type: 'password', autoComplete: 'current-password' },

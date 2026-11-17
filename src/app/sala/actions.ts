@@ -5,7 +5,7 @@ import { revalidatePath } from 'next/cache';
 import { getCurrentUser } from '@/lib/supabase/server';
 import { isAdminConfigured } from '@/lib/supabase/admin';
 import {
-  type RoomSettings, addBot, createRoom, joinRoom, leaveRoom, normalizeCode, removeBot, setLobbyReady, startDraft, updateRoomSettings,
+  type RoomSettings, addBot, createRoom, fillWithBots, joinRoom, leaveRoom, normalizeCode, removeBot, setLobbyReady, startDraft, updateRoomSettings,
 } from '@/lib/rooms/service';
 import type { RoomSpeed } from '@/lib/rooms/types';
 
@@ -86,6 +86,14 @@ export async function addBotAction(code: string): Promise<RoomFormState> {
   const { user } = await requireUser(`/sala/${code}`);
   if (!isAdminConfigured) return NOT_READY;
   const r = await addBot(code, user.id);
+  revalidatePath(`/sala/${code}`);
+  return r.ok ? {} : { error: r.reason };
+}
+
+export async function fillBotsAction(code: string): Promise<RoomFormState> {
+  const { user } = await requireUser(`/sala/${code}`);
+  if (!isAdminConfigured) return NOT_READY;
+  const r = await fillWithBots(code, user.id);
   revalidatePath(`/sala/${code}`);
   return r.ok ? {} : { error: r.reason };
 }

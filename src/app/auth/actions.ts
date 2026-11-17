@@ -16,7 +16,7 @@ const NOT_CONFIGURED: FormState = { error: 'O Supabase ainda não foi configurad
 
 function safeNext(value: FormDataEntryValue | null): string {
   const v = typeof value === 'string' ? value : '';
-  return v.startsWith('/') && !v.startsWith('//') ? v : '/perfil';
+  return v.startsWith('/') && !v.startsWith('//') ? v : '/jogar';
 }
 
 function translate(msg: string): string {
@@ -35,6 +35,7 @@ export async function signUp(_: FormState, form: FormData): Promise<FormState> {
   const username = String(form.get('username') ?? '').trim();
   const email = String(form.get('email') ?? '').trim();
   const password = String(form.get('password') ?? '');
+  const next = safeNext(form.get('next'));
 
   if (!USERNAME_RE.test(username)) return { error: 'Nome de usuário: 3 a 16 caracteres, só letras, números e _.' };
   if (password.length < 8) return { error: 'A senha precisa ter pelo menos 8 caracteres.' };
@@ -48,11 +49,11 @@ export async function signUp(_: FormState, form: FormData): Promise<FormState> {
     password,
     options: {
       data: { username },
-      emailRedirectTo: `${SITE_URL}/auth/confirm?next=/perfil`,
+      emailRedirectTo: `${SITE_URL}/auth/confirm?next=${encodeURIComponent(next)}`,
     },
   });
   if (error) return { error: translate(error.message) };
-  if (data.session) redirect('/perfil'); // confirmação de e-mail desligada no projeto
+  if (data.session) redirect(next); // confirmação de e-mail desligada: entra direto (Arena ou a sala do convite)
   return { message: 'Conta criada! Enviamos um link de confirmação para o seu e-mail.' };
 }
 

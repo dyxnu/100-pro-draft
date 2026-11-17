@@ -6,7 +6,7 @@ import { authRealtime, getBrowserClient } from '@/lib/supabase/client';
 import type { MemberRow, RoomRow, RoomSpeed } from '@/lib/rooms/types';
 import { ROOM_SIZE, seatPlayerId } from '@/lib/rooms/types';
 import {
-  addBotAction, joinRoomAction, leaveRoomAction, removeBotAction, lobbyReadyAction, startDraftAction, updateSettingsAction, type RoomFormState,
+  addBotAction, fillBotsAction, joinRoomAction, leaveRoomAction, removeBotAction, lobbyReadyAction, startDraftAction, updateSettingsAction, type RoomFormState,
 } from '@/app/sala/actions';
 import { Avatar, AvatarPicker } from '@/components/profile/Avatar';
 import { SEAT_COLORS } from './ui';
@@ -102,6 +102,11 @@ export function LobbyView({ room, members, meId, isMember, avatars, myAvatar }: 
         <section className="lb-panel">
           <div className="lb-panel-head">
             <h2>Jogadores</h2>
+            {isHost && free > 0 && (
+              <button className="lb-fill" disabled={pending} onClick={() => run(() => fillBotsAction(room.code))}>
+                🤖 Preencher {free === 1 ? 'a vaga' : `as ${free} vagas`} com bots
+              </button>
+            )}
             <div className="lb-progress" title="Jogadores prontos">
               <span style={{ width: `${humans.length ? (readyCount / humans.length) * 100 : 0}%` }} />
               <b>{readyCount}/{humans.length} prontos</b>
