@@ -22,15 +22,44 @@ export async function createClient() {
   });
 }
 
+/** Perfil completo (migração 0006). Escrita só pelo servidor (service role). */
 export interface Profile {
   id: string;
   username: string;
   tag: string;
+  /** Ícone: id de campeão ("Diana") ou ícone de perfil do LoL ("icon:4568"). */
   avatar_url: string | null;
   level: number;
   xp: number;
   created_at: string;
+  is_guest: boolean;
+  blue_essence: number;
+  honor_level: number;
+  honor_progress: number;
+  kudos_count: number;
+  games: number;
+  wins: number;
+  titles_won: number;
+  tournaments: number;
+  rank_tier: string | null;
+  rank_division: number | null;
+  lp: number;
+  rank_score: number;
+  peak_tier: string | null;
+  title_id: string | null;
+  banner_id: string | null;
+  border_id: string | null;
+  theme_id: string | null;
+  victory_fx: string | null;
+  vip_until: string | null;
+  is_beta: boolean;
+  beta_claimed: boolean;
+  name_change_tokens: number;
+  referral_code: string | null;
+  referred_by: string | null;
 }
+
+export const isVip = (p: Pick<Profile, 'vip_until'> | null | undefined) => !!p?.vip_until && new Date(p.vip_until).getTime() > Date.now();
 
 /**
  * Usuário logado + perfil, ou null. Nunca lança se o Supabase não estiver configurado.
@@ -46,7 +75,7 @@ export const getCurrentUser = cache(async () => {
   const user = { id: sub };
   const { data: profile } = await supabase
     .from('profiles')
-    .select('id, username, tag, avatar_url, level, xp, created_at')
+    .select('*')
     .eq('id', user.id)
     .single<Profile>();
   return { user, profile };

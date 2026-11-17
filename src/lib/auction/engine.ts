@@ -50,7 +50,8 @@ export const DEFAULT_CONFIG: AuctionConfig = {
 export type BotProfile = 'economico' | 'equilibrado' | 'agressivo' | 'estrategico';
 export type AcquiredHow = 'leilao' | 'sobra';
 
-export interface RosterSlot { champId: string; price: number; how: AcquiredHow; offRole: boolean }
+/** skin: número da skin do Data Dragon (5% de chance por lote; só visual, não muda atributos). */
+export interface RosterSlot { champId: string; price: number; how: AcquiredHow; offRole: boolean; skin?: number }
 
 export interface Player {
   id: string;
@@ -71,6 +72,8 @@ export interface Lot {
   passes: string[];
   startedAt: number;
   endsAt: number;
+  /** Número da skin sorteada para este lote (ausente = skin padrão). */
+  skin?: number;
 }
 
 export interface RoutePick {

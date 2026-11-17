@@ -4,6 +4,7 @@ import {
   ROLES, type BotProfile, type Champion, type Role,
   chooseRoute, createGame, passLot, placeBid,
 } from '@/lib/auction/engine';
+import { recordResults } from '@/lib/progress/service';
 import { createBrains } from '@/lib/auction/bots';
 import { advance, nextWake } from '@/lib/auction/runner';
 import {
@@ -355,6 +356,8 @@ export async function performAction(
     if (tour?.stage === 'done' && room.status !== 'finished') {
       await admin.from('rooms').update({ status: 'finished', finished_at: new Date().toISOString() }).eq('id', room.id);
     }
+    // Campeonato acabou: grava histórico, elo, essência, maestria e honra (uma vez por sala).
+    if (tour?.stage === 'done') await recordResults(room.id, s, tour);
     return { ...result, serverNow: now, state: s, tournament: tour, nextTickAt: wake };
   }
   return { ok: false, reason: 'Servidor ocupado, tente de novo.', serverNow: now };
