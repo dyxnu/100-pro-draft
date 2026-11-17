@@ -1,4 +1,6 @@
 import type { Profile } from '@/lib/supabase/server';
+import { Avatar } from '@/components/profile/Avatar';
+import { ProfileAvatar } from '@/components/profile/ProfileAvatar';
 
 const STAT_PLACEHOLDERS = [
   { k: 'Elo', v: 'Sem classificação', s: 'MD10 libera com o modo Ranked' },
@@ -12,9 +14,7 @@ export function ProfileView({ profile, isOwner }: { profile: Profile; isOwner: b
   return (
     <div className="mt-8 space-y-6">
       <section className="panel flex flex-col gap-5 p-6 sm:flex-row sm:items-center">
-        <div className="grid h-20 w-20 shrink-0 place-items-center rounded-2xl border border-gold/50 bg-panel2 text-3xl font-extrabold text-gold">
-          {profile.username.slice(0, 1).toUpperCase()}
-        </div>
+        {isOwner ? <ProfileAvatar current={profile.avatar_url} /> : <Avatar id={profile.avatar_url} size={80} color="#b48a2f" />}
         <div className="min-w-0 flex-1">
           <p className="eyebrow">{isOwner ? 'Seu perfil' : 'Perfil do jogador'}</p>
           <h1 className="truncate text-3xl font-bold text-gold2">

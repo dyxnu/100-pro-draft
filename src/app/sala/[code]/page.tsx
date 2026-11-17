@@ -3,7 +3,8 @@ import Link from 'next/link';
 import { notFound, redirect } from 'next/navigation';
 import { createClient, getCurrentUser } from '@/lib/supabase/server';
 import { normalizeCode } from '@/lib/rooms/service';
-import type { AuctionRow, MemberRow, RoomRow } from '@/lib/rooms/types';
+import { type AuctionRow, type MemberRow, type RoomRow, seatPlayerId } from '@/lib/rooms/types';
+import { botAvatar } from '@/lib/profile/avatars';
 import { LobbyView } from '@/components/draft/LobbyView';
 import { AuctionView } from '@/components/draft/AuctionView';
 
@@ -29,12 +30,24 @@ export default async function SalaPage({ params }: Params) {
   const list = (members ?? []) as MemberRow[];
   const me = list.find(m => m.user_id === session.user.id) ?? null;
 
+  // Ícone de cada vaga: o do perfil para pessoas, um fixo para bots.
+  const userIds = list.flatMap(m => (m.user_id ? [m.user_id] : []));
+  const { data: profs } = userIds.length
+    ? await supabase.from('profiles').select('id, avatar_url').in('id', userIds)
+    : { data: [] as { id: string; avatar_url: string | null }[] };
+  const avatarOf = new Map((profs ?? []).map(p => [p.id, p.avatar_url]));
+  const avatars: Record<string, string> = {};
+  for (const m of list) {
+    const a = m.user_id ? avatarOf.get(m.user_id) : botAvatar(m.seat);
+    if (a) avatars[seatPlayerId(m.seat)] = a;
+  }
+
   if (room.status === 'abandoned') {
     return <Message title="Sala encerrada" text="Todos saíram desta sala antes do draft começar." />;
   }
 
   if (room.status === 'lobby') {
-    return <LobbyView room={room} members={list} meId={session.user.id} isMember={!!me} />;
+    return <LobbyView room={room} members={list} meId={session.user.id} isMember={!!me} avatars={avatars} myAvatar={session.profile?.avatar_url ?? null} />;
   }
 
   const { data: auction } = await supabase.from('auctions')
@@ -51,6 +64,7 @@ export default async function SalaPage({ params }: Params) {
       initialNextTickAt={auction.next_tick_at ? Date.parse(auction.next_tick_at) : null}
       serverNow={Date.now()}
       mySeat={me?.seat ?? null}
+      avatars={avatars}
     />
   );
 }

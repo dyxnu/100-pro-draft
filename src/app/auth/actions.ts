@@ -4,6 +4,7 @@ import { redirect } from 'next/navigation';
 import { revalidatePath } from 'next/cache';
 import { createClient } from '@/lib/supabase/server';
 import { SITE_URL, isSupabaseConfigured } from '@/lib/supabase/env';
+import { isAvatar } from '@/lib/profile/avatars';
 
 export interface FormState {
   error?: string;
@@ -109,4 +110,17 @@ export async function updateUsername(_: FormState, form: FormData): Promise<Form
   if (error) return { error: error.code === '23505' ? 'Esse nome de usuário já está em uso.' : 'Não foi possível salvar.' };
   revalidatePath('/', 'layout');
   return { message: 'Nome de usuário atualizado.' };
+}
+
+/** Troca o ícone do perfil (id de um campeão do Data Dragon). */
+export async function updateAvatar(champId: string): Promise<FormState> {
+  if (!isSupabaseConfigured) return NOT_CONFIGURED;
+  if (!isAvatar(champId)) return { error: 'Ícone inválido.' };
+  const supabase = await createClient();
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) return { error: 'Sessão expirada. Entre novamente.' };
+  const { error } = await supabase.from('profiles').update({ avatar_url: champId }).eq('id', user.id);
+  if (error) return { error: 'Não foi possível salvar o ícone.' };
+  revalidatePath('/', 'layout');
+  return { message: 'Ícone atualizado.' };
 }

@@ -9,7 +9,8 @@ import {
 import { BOT_PROFILES } from '@/lib/auction/bots';
 import type { ActionResponse, ClientAction } from '@/lib/rooms/types';
 import { seatPlayerId } from '@/lib/rooms/types';
-import { getBrowserClient } from '@/lib/supabase/client';
+import { authRealtime, getBrowserClient } from '@/lib/supabase/client';
+import { Avatar, AvatarMapContext, usePlayerAvatar } from '@/components/profile/Avatar';
 import type { TournamentState } from '@/lib/tournament/engine';
 import { buildCard, CLASS_LABEL } from '@/lib/champions/cards';
 import { TournamentView } from '@/components/tournament/TournamentView';
@@ -20,7 +21,7 @@ interface Snapshot { state: AuctionState; tournament: TournamentState | null; ne
 // Ordem das versões: leilão primeiro, depois campeonato (para descartar mensagens antigas).
 const versionOf = (st: AuctionState, t: TournamentState | null) => st.version * 1_000_000 + (t?.version ?? -1);
 
-export function AuctionView({ code, roomId, initialState, initialTournament, initialNextTickAt, serverNow, mySeat }: {
+export function AuctionView({ code, roomId, initialState, initialTournament, initialNextTickAt, serverNow, mySeat, avatars = {} }: {
   code: string;
   roomId: string;
   initialState: AuctionState;
@@ -28,6 +29,7 @@ export function AuctionView({ code, roomId, initialState, initialTournament, ini
   initialNextTickAt: number | null;
   serverNow: number;
   mySeat: number | null;
+  avatars?: Record<string, string>;
 }) {
   const me = mySeat == null ? null : seatPlayerId(mySeat);
   const [snap, setSnap] = useState<Snapshot>({ state: initialState, tournament: initialTournament, nextTickAt: initialNextTickAt });
@@ -63,7 +65,11 @@ export function AuctionView({ code, roomId, initialState, initialTournament, ini
   // Tempo real: cada gravação do servidor chega para todos da sala.
   useEffect(() => {
     const sb = getBrowserClient();
-    const ch = sb.channel(`leilao:${roomId}`)
+    let cancelled = false;
+    let ch: ReturnType<typeof sb.channel> | null = null;
+    void authRealtime().then(() => {
+      if (cancelled) return;
+      ch = sb.channel(`leilao:${roomId}`)
       .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'auctions', filter: `room_id=eq.${roomId}` }, (p: { new: unknown }) => {
         // Colunas grandes que não mudaram podem vir vazias na mensagem: aproveita o que já temos.
         const row = p.new as { state?: AuctionState | null; tournament?: TournamentState | null; next_tick_at?: string | null };
@@ -75,7 +81,8 @@ export function AuctionView({ code, roomId, initialState, initialTournament, ini
         });
       })
       .subscribe();
-    return () => { sb.removeChannel(ch); };
+    });
+    return () => { cancelled = true; if (ch) sb.removeChannel(ch); };
   }, [roomId]);
 
   // "Cutucada" no relógio do servidor quando um prazo vence (fim de lote, vez dos bots...).
@@ -106,16 +113,27 @@ export function AuctionView({ code, roomId, initialState, initialTournament, ini
 
   if (s.phase === 'finished') {
     return (
-      <>
+      <AvatarMapContext.Provider value={avatars}>
         {snap.tournament
           ? <TournamentView s={s} t={snap.tournament} me={me} act={act} pending={pending} serverTime={serverTime} auctionSummary={<Results s={s} me={me} />} />
           : <Results s={s} me={me} />}
         {toast && <div className="ad-toast" role="alert">{toast}</div>}
-      </>
+      </AvatarMapContext.Provider>
     );
   }
 
-  return <AuctionStage s={s} me={me} act={act} pending={pending} serverTime={serverTime} code={code} toast={toast} />;
+  return (
+    <AvatarMapContext.Provider value={avatars}>
+      <AuctionStage s={s} me={me} act={act} pending={pending} serverTime={serverTime} code={code} toast={toast} />
+    </AvatarMapContext.Provider>
+  );
+}
+
+/** Ícone do jogador: o campeão escolhido no perfil, ou a inicial na cor da vaga. */
+function PlayerAvatar({ pid, name, small = false }: { pid: string; name: string; small?: boolean }) {
+  const icon = usePlayerAvatar(pid);
+  if (icon) return <Avatar id={icon} size={small ? 26 : 34} color={seatColor(pid)} />;
+  return <span className={`ad-avatar ${small ? 'sm' : ''}`} style={{ background: seatColor(pid) }}>{name.slice(0, 1).toUpperCase()}</span>;
 }
 
 /** A tela do leilão (sem rede): recebe o estado e envia intenções por act(). */
@@ -172,7 +190,7 @@ function MyPanel({ s, meId }: { s: AuctionState; meId: string }) {
   return (
     <>
       <div className="ad-me">
-        <span className="ad-avatar" style={{ background: seatColor(meId) }}>{p.name.slice(0, 1).toUpperCase()}</span>
+        <PlayerAvatar pid={meId} name={p.name} />
         <div><b>{p.name}</b><small>Você</small></div>
         <span className="ad-count">{filled}/5</span>
       </div>
@@ -386,7 +404,7 @@ function PlayerRow({ s, pid }: { s: AuctionState; pid: string }) {
   return (
     <div className={`ad-player ${leader ? 'leader' : ''} ${cur && !el.ok && !leader ? 'out' : ''}`} style={{ '--pc': seatColor(pid) } as React.CSSProperties}>
       <div className="ph">
-        <span className="ad-avatar sm" style={{ background: seatColor(pid) }}>{p.name.slice(0, 1).toUpperCase()}</span>
+        <PlayerAvatar pid={pid} name={p.name} small />
         <b>{p.name}</b>
         <span className="money"><span className="coin">◐</span>{fmt(p.budget).replace('R$ ', '')}</span>
       </div>
