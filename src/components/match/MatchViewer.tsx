@@ -9,6 +9,7 @@ import {
 import type { MatchResult, PlayerKey } from '@/lib/match/sim';
 import { ROLE_LABEL } from '@/components/draft/ui';
 import { ALL_KEYS, buildDeaths, buildPaths, isDeadAt, positionAt } from './positions';
+import { play } from '@/lib/sound';
 import './match.css';
 
 export interface ViewerSide {
@@ -67,6 +68,21 @@ export function MatchViewer({ result, sides, syncStart, syncSpeed = 20, serverNo
     return () => cancelAnimationFrame(raf);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [playing, speed, synced, syncStart, syncSpeed, result, end, paths]);
+
+  // Sons dos lances conforme a partida avança (só os que acabaram de acontecer).
+  const heard = useRef(-1);
+  useEffect(() => {
+    const idx = result.events.reduce((n, e, i) => (e.t <= t ? i : n), -1);
+    if (heard.current < 0 || idx < heard.current || idx - heard.current > 6) { heard.current = idx; return; }
+    for (let i = heard.current + 1; i <= idx; i++) {
+      const e = result.events[i];
+      if (e.type === 'nexus') play('victory');
+      else if (e.type === 'baron' || e.type === 'dragon') play('objective');
+      else if (e.type === 'tower' || e.type === 'inhibitor' || e.type === 'nexus_tower') play('tower');
+      else if (e.type === 'kill' || e.type === 'gank' || e.type === 'teamfight') play('kill');
+    }
+    heard.current = idx;
+  }, [t, result]);
 
   const past = result.events.filter(e => e.t <= t);
   const score = past.length ? past[past.length - 1].score : [0, 0];
