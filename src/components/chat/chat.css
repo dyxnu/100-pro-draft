@@ -1,0 +1,99 @@
+/* Chat (global e da sala), aviso de convidado e elogios — prefixo ch- (tema Diana) */
+.ch-box { display: flex; flex-direction: column; min-height: 0; flex: 1; gap: 8px; }
+.ch-list {
+  flex: 1; min-height: 160px; max-height: 340px; overflow-y: auto; display: flex; flex-direction: column; gap: 6px;
+  padding: 8px; border-radius: 12px; background: var(--color-bg2); border: 1px solid var(--color-line);
+  overscroll-behavior: contain;
+}
+.ch-empty { margin: auto; padding: 12px; text-align: center; font-size: 13px; color: var(--color-muted); }
+.ch-line { display: flex; flex-direction: column; gap: 1px; padding: 5px 9px; border-radius: 10px; background: var(--color-panel); font-size: 13px; line-height: 1.35; word-break: break-word; }
+.ch-line.mine { background: var(--color-moon); }
+.ch-meta { display: flex; align-items: baseline; gap: 6px; min-width: 0; }
+.ch-meta b { font-weight: 800; color: var(--color-gold2); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.ch-meta b.ch-vip {
+  background: linear-gradient(90deg, #b48a2f, #e8b64a, #b48a2f); -webkit-background-clip: text; background-clip: text; color: transparent;
+}
+.ch-title { font-size: 10px; font-weight: 800; padding: 0 6px; border-radius: 999px; color: var(--color-accent); background: var(--color-moon); white-space: nowrap; }
+.ch-line.mine .ch-title { background: var(--color-panel); }
+.ch-meta time { margin-left: auto; font-size: 10px; color: var(--color-muted); flex: none; }
+.ch-body { color: var(--color-text); }
+.ch-form { display: flex; gap: 6px; }
+.ch-form input {
+  flex: 1; min-width: 0; padding: 8px 12px; border-radius: 12px; font-size: 14px;
+  background: var(--color-panel); border: 1px solid var(--color-line); color: var(--color-text);
+}
+.ch-form input:focus { outline: 2px solid var(--color-accent2); outline-offset: 0; }
+.ch-form button { flex: none; width: 40px; border-radius: 12px; font-weight: 900; color: #fff; background: var(--color-accent); }
+.ch-form button:disabled { opacity: .45; cursor: not-allowed; }
+.ch-readonly { font-size: 12px; color: var(--color-muted); text-align: center; }
+.ch-readonly a, .ch-muted a { color: var(--color-accent); font-weight: 800; text-decoration: underline; }
+.ch-error { font-size: 12px; font-weight: 700; color: var(--color-danger); }
+
+/* Painéis flutuantes */
+.ch-dock { position: fixed; bottom: 16px; z-index: 50; display: flex; flex-direction: column; gap: 8px; max-width: calc(100vw - 32px); }
+.ch-dock.right { right: 16px; align-items: flex-end; }
+.ch-dock.left { left: 16px; align-items: flex-start; }
+.ch-panel {
+  width: 340px; max-width: 100%; display: flex; flex-direction: column; gap: 8px; padding: 12px;
+  border-radius: 18px; background: var(--color-panel); border: 1px solid var(--color-line);
+  box-shadow: 0 24px 50px -20px rgba(20, 23, 56, .55); animation: fadeUp .2s ease-out both;
+}
+.ch-panel[hidden] { display: none; }
+.ch-panel header { display: flex; align-items: center; justify-content: space-between; font-size: 14px; color: var(--color-gold2); }
+.ch-panel header button { width: 28px; height: 28px; border-radius: 8px; color: var(--color-muted); }
+.ch-panel header button:hover { background: var(--color-bg2); }
+.ch-fab {
+  position: relative; display: flex; align-items: center; gap: 6px; padding: 10px 16px; border-radius: 999px;
+  font-size: 14px; font-weight: 800; color: #fff; background: linear-gradient(135deg, #3d40a1, #6d63db);
+  box-shadow: 0 10px 24px -10px rgba(29, 33, 72, .8); transition: transform .15s;
+}
+.ch-fab:hover { transform: translateY(-2px); }
+.ch-fab.room { background: linear-gradient(135deg, #1d2148, #3d40a1); }
+.ch-fab i {
+  position: absolute; top: -6px; right: -4px; min-width: 20px; height: 20px; padding: 0 5px; border-radius: 999px;
+  display: grid; place-items: center; font-size: 11px; font-style: normal; background: var(--color-danger); color: #fff;
+}
+@media (max-width: 640px) {
+  .ch-fab span { display: none; }
+  .ch-panel { width: calc(100vw - 32px); }
+  .ch-list { max-height: 45vh; }
+}
+
+/* Chat embutido no saguão */
+.ch-inline .ch-list { max-height: 260px; }
+
+/* Aviso de convidado */
+.ch-guest {
+  margin: 12px auto 0; width: calc(100% - 32px); max-width: 72rem; display: flex; flex-wrap: wrap; align-items: center; gap: 10px;
+  padding: 10px 14px; border-radius: 14px; font-size: 14px; color: #5b4310;
+  background: linear-gradient(90deg, #fff6d8, #f6e7b8); border: 1px solid #e8cf86;
+}
+.ch-guest p { flex: 1; min-width: 200px; }
+.ch-guest-cta { padding: 6px 14px; border-radius: 10px; font-weight: 800; color: #fff; background: var(--color-accent); }
+.ch-guest button { width: 28px; height: 28px; border-radius: 8px; color: #8a6a1c; }
+
+/* Elogios */
+.ch-kudos {
+  margin-top: 18px; padding: 18px; border-radius: 18px; text-align: center;
+  background: linear-gradient(180deg, var(--color-panel), var(--color-panel2)); border: 1px solid var(--color-line);
+}
+.ch-kudos h3 { font-size: 18px; font-weight: 900; color: var(--color-gold2); }
+.ch-kudos-eyebrow { font-size: 11px; font-weight: 800; letter-spacing: .2em; text-transform: uppercase; color: var(--color-gold); }
+.ch-muted { margin-top: 4px; font-size: 13px; color: var(--color-muted); }
+.ch-muted.small { font-size: 12px; }
+.ch-kudos-people { display: flex; flex-wrap: wrap; justify-content: center; gap: 10px; margin-top: 12px; }
+.ch-kudos-people button {
+  display: flex; flex-direction: column; align-items: center; gap: 4px; width: 96px; padding: 8px; border-radius: 14px;
+  border: 2px solid transparent; background: var(--color-bg2); font-size: 12px; font-weight: 800; color: var(--color-text);
+}
+.ch-kudos-people button span { max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.ch-kudos-people button.on { border-color: var(--color-accent); background: var(--color-moon); }
+.ch-kudos-kinds { display: flex; flex-wrap: wrap; justify-content: center; gap: 8px; margin-top: 12px; }
+.ch-kudos-kinds button {
+  display: flex; align-items: center; gap: 6px; padding: 8px 14px; border-radius: 12px; font-size: 13px; font-weight: 800;
+  color: var(--color-gold2); background: var(--color-panel); border: 1px solid var(--color-line); transition: transform .12s, background .12s;
+}
+.ch-kudos-kinds button:hover:not(:disabled) { transform: translateY(-1px); background: var(--color-moon); }
+.ch-kudos-kinds button:disabled { opacity: .45; cursor: not-allowed; }
+.ch-kudos-done { margin-top: 8px; font-size: 14px; color: var(--color-teal); }
+.ch-kudos-got { margin-top: 10px; font-size: 13px; font-weight: 700; color: var(--color-gold); }

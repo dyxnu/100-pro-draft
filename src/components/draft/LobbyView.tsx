@@ -3,20 +3,26 @@
 import { useCallback, useEffect, useRef, useState, useTransition } from 'react';
 import { useRouter } from 'next/navigation';
 import { authRealtime, getBrowserClient } from '@/lib/supabase/client';
-import type { MemberRow, RoomRow, RoomSpeed } from '@/lib/rooms/types';
+import Link from 'next/link';
+import type { LobbyRank, MemberRow, RoomMode, RoomRow, RoomSpeed } from '@/lib/rooms/types';
 import { ROOM_SIZE, seatPlayerId } from '@/lib/rooms/types';
 import {
   addBotAction, fillBotsAction, joinRoomAction, leaveRoomAction, removeBotAction, lobbyReadyAction, startDraftAction, updateSettingsAction, type RoomFormState,
 } from '@/app/sala/actions';
 import { Avatar, AvatarPicker } from '@/components/profile/Avatar';
+import { ChatBox } from '@/components/chat/ChatBox';
+import { roomChannel } from '@/components/chat/shared';
 import { SEAT_COLORS } from './ui';
 import './lobby.css';
 
 type Channel = ReturnType<ReturnType<typeof getBrowserClient>['channel']>;
 
-export function LobbyView({ room, members, meId, isMember, avatars, myAvatar }: {
+export function LobbyView({ room, members, meId, isMember, avatars, myAvatar, ranks = {}, meGuest = false }: {
   room: RoomRow; members: MemberRow[]; meId: string; isMember: boolean;
   avatars: Record<string, string>; myAvatar: string | null;
+  /** Elo de cada humano (por user_id), para cada um decidir se quer jogar. */
+  ranks?: Record<string, LobbyRank>;
+  meGuest?: boolean;
 }) {
   const router = useRouter();
   const [pending, startTransition] = useTransition();
@@ -31,7 +37,10 @@ export function LobbyView({ room, members, meId, isMember, avatars, myAvatar }: 
   const humans = members.filter(m => m.user_id);
   const free = room.max_players - members.length;
   const waiting = humans.filter(m => !m.ready);
-  const canStart = waiting.length === 0 && members.length >= 2;
+  const ranked = room.mode === 'ranked';
+  const bots = members.length - humans.length;
+  const guestsIn = humans.filter(m => ranks[m.user_id!]?.guest);
+  const canStart = waiting.length === 0 && members.length >= 2 && (!ranked || bots === 0);
   const readyCount = humans.length - waiting.length;
 
   // Tempo real: mudanças na sala/membros recarregam os dados do servidor; um "ping" por broadcast
@@ -82,14 +91,18 @@ export function LobbyView({ room, members, meId, isMember, avatars, myAvatar }: 
       <section className="lb-hero anim-fade-up">
         <div className="lb-moon" aria-hidden />
         <div className="min-w-0">
-          <p className="lb-eyebrow">Saguão · casual · mata-mata</p>
+          <p className="lb-eyebrow">Saguão · {ranked ? 'ranqueada' : 'casual'} · mata-mata</p>
           <h1>Sala <button className="lb-code" onClick={() => copy('code')} title="Copiar código">{room.code}</button></h1>
           <div className="lb-chips">
+            <span className={`lb-mode ${ranked ? 'ranked' : ''}`}>{ranked ? '🏆 Ranqueada · vale elo (PDL)' : '🎲 Casual · não mexe no elo'}</span>
             <span>👥 {members.length}/{room.max_players} participantes</span>
             <span>⏱ {room.speed === 'rapido' ? '6 s' : '10 s'} por campeão</span>
             <span>{room.show_overall ? '👁 overall à mostra' : '🙈 overall escondido'}</span>
-            <span>🤖 {members.length - humans.length} bot{members.length - humans.length === 1 ? '' : 's'}</span>
+            <span>🤖 {bots} bot{bots === 1 ? '' : 's'}</span>
           </div>
+          {ranked && guestsIn.length > 0 && (
+            <p className="lb-note">Convidados nesta sala ({guestsIn.map(g => g.display_name).join(', ')}) jogam, mas a ranqueada não conta para eles.</p>
+          )}
         </div>
         <div className="lb-invite">
           <button className="btn-primary" onClick={() => copy('link')}>{copied === 'link' ? '✓ Link copiado!' : '🔗 Copiar convite'}</button>
@@ -102,7 +115,7 @@ export function LobbyView({ room, members, meId, isMember, avatars, myAvatar }: 
         <section className="lb-panel">
           <div className="lb-panel-head">
             <h2>Jogadores</h2>
-            {isHost && free > 0 && (
+            {isHost && free > 0 && !ranked && (
               <button className="lb-fill" disabled={pending} onClick={() => run(() => fillBotsAction(room.code))}>
                 🤖 Preencher {free === 1 ? 'a vaga' : `as ${free} vagas`} com bots
               </button>
@@ -122,8 +135,8 @@ export function LobbyView({ room, members, meId, isMember, avatars, myAvatar }: 
                     <span className="lb-plus">+</span>
                     <div className="min-w-0 flex-1">
                       <p className="font-bold">Vaga {seat + 1}</p>
-                      <p className="text-xs text-muted">convide um amigo{isHost ? ' ou' : ''}</p>
-                      {isHost && (
+                      <p className="text-xs text-muted">convide um amigo{isHost && !ranked ? ' ou' : ''}</p>
+                      {isHost && !ranked && (
                         <button className="lb-addbot" disabled={pending} onClick={() => run(() => addBotAction(room.code))}>🤖 Adicionar bot</button>
                       )}
                     </div>
@@ -147,6 +160,11 @@ export function LobbyView({ room, members, meId, isMember, avatars, myAvatar }: 
                     <p className="truncate text-base font-extrabold">{m.display_name}{isMe && <span className="ml-1.5 text-xs font-semibold text-muted">(você)</span>}</p>
                     <span className={`lb-status ${isBot ? 'bot' : ready ? 'ok' : 'wait'}`}>{ready && !isBot ? '✓ ' : ''}{status}</span>
                     {hostSeat && <span className="lb-status host">Dono</span>}
+                    {!isBot && ranks[m.user_id!] && (
+                      ranks[m.user_id!].guest
+                        ? <span className="lb-elo guest" title="Convidado: não joga ranqueada">Convidado</span>
+                        : <span className="lb-elo" style={{ '--tier': ranks[m.user_id!].color ?? undefined } as React.CSSProperties} title="Elo">{ranks[m.user_id!].label}</span>
+                    )}
                     {isBot && isHost && <button className="lb-change danger" disabled={pending} onClick={() => run(() => removeBotAction(room.code, seat))}>Remover bot</button>}
                     {isMe && <button className="lb-change" onClick={() => setPicker(true)}>Trocar ícone</button>}
                   </div>
@@ -176,7 +194,8 @@ export function LobbyView({ room, members, meId, isMember, avatars, myAvatar }: 
                 </button>
                 <p className="text-sm text-muted">
                   {canStart ? 'Todos prontos! Pode começar.'
-                    : members.length < 2 ? 'Precisa de pelo menos 2 participantes: convide alguém ou adicione bots.'
+                    : members.length < 2 ? (ranked ? 'A ranqueada precisa de pelo menos 2 jogadores: convide alguém.' : 'Precisa de pelo menos 2 participantes: convide alguém ou adicione bots.')
+                    : ranked && bots > 0 ? 'A ranqueada é só entre pessoas: remova os bots.'
                     : `Aguardando ${waiting.map(w => (w.user_id === meId ? 'você' : w.display_name)).join(', ')} ficar pronto.`}
                 </p>
                 <button className={`btn-primary lb-big ${canStart ? 'go' : ''}`} disabled={pending || !canStart} onClick={() => startTransition(async () => {
@@ -203,11 +222,39 @@ export function LobbyView({ room, members, meId, isMember, avatars, myAvatar }: 
             )}
             {isMember && <button className="lb-leave" disabled={pending} onClick={() => run(() => leaveRoomAction(room.code))}>Sair da sala</button>}
             {error && <p role="alert" className="alert-error">{error}</p>}
+            {meGuest && (
+              <p className="lb-note guest">
+                Você está jogando como convidado — crie uma conta para ganhar elo, essência azul, skins e histórico.{' '}
+                <Link href="/cadastro">Criar conta</Link>
+              </p>
+            )}
+          </section>
+
+          <section className="lb-panel">
+            <h2>Chat da sala</h2>
+            <ChatBox className="ch-inline" channel={roomChannel(room.id)} meId={meId} canSend={isMember}
+              readOnlyHint="Entre na sala para conversar." />
           </section>
 
           <section className="lb-panel">
             <h2>Configurações {!isHost && <small>(o dono escolhe)</small>}</h2>
             <div className="lb-settings">
+              <div className="lb-row">
+                <span>Modo</span>
+                <div className="lb-seg">
+                  {([['casual', 'Casual'], ['ranked', 'Ranqueada']] as [RoomMode, string][]).map(([v, l]) => (
+                    <button key={v} className={room.mode === v ? 'on' : ''}
+                      disabled={!isHost || pending || (v === 'ranked' && (meGuest || bots > 0))}
+                      title={v === 'ranked' && meGuest ? 'Convidados não jogam ranqueada' : v === 'ranked' && bots > 0 ? 'Remova os bots para jogar ranqueada' : undefined}
+                      onClick={() => run(() => updateSettingsAction(room.code, { mode: v }))}>{l}</button>
+                  ))}
+                </div>
+              </div>
+              <p className="lb-hint">
+                {ranked
+                  ? 'Ranqueada: só pessoas (sem bots) e vale PDL para quem tem conta. Veja o elo de cada um antes de ficar pronto.'
+                  : 'Casual: vale essência e experiência, mas não mexe no elo. Bots liberados.'}
+              </p>
               <Toggle label="Overall à mostra no leilão" on={room.show_overall} disabled={!isHost || pending}
                 onChange={v => run(() => updateSettingsAction(room.code, { showOverall: v }))} />
               <div className="lb-row">

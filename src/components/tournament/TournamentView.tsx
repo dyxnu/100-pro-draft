@@ -12,6 +12,7 @@ import {
 import { ChampionCard } from '@/components/cards/ChampionCard';
 import { MatchViewer, type ViewerSide } from '@/components/match/MatchViewer';
 import { ChampImg, ROLE_LABEL, seatColor } from '@/components/draft/ui';
+import { KudosPanel } from '@/components/chat/RoomSocial';
 import './tournament.css';
 
 const BLUE = '#3b9cff';
@@ -51,6 +52,7 @@ export function TournamentView({ s, t, me, act, pending, serverTime, auctionSumm
       <Bracket s={s} t={t} me={me} />
 
       {t.stage === 'done' && <Champion s={s} t={t} me={me} />}
+      {t.stage === 'done' && <KudosPanel />}
 
       {t.stage === 'lineup' && myTeam && !myTeam.eliminated && (
         myMatch && myMatch.a && myMatch.b
