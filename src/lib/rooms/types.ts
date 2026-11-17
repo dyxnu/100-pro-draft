@@ -5,12 +5,16 @@ import type { TournamentState } from '@/lib/tournament/engine';
 
 export type RoomStatus = 'lobby' | 'drafting' | 'finished' | 'abandoned';
 export type RoomSpeed = 'normal' | 'rapido';
+export type RoomMode = 'casual' | 'ranked';
+
+/** Elo de cada jogador humano, para o saguão (lido de profiles; vazio sem a migração 0006). */
+export interface LobbyRank { label: string; color: string | null; guest: boolean }
 
 export interface RoomRow {
   id: string;
   code: string;
   host_id: string;
-  mode: 'casual' | 'ranked';
+  mode: RoomMode;
   status: RoomStatus;
   bots_enabled: boolean;
   speed: RoomSpeed;

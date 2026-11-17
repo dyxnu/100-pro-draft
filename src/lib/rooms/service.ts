@@ -11,7 +11,7 @@ import {
   type TournamentState, changeStrategy, createTournament, setReady, swapLineup, tickTournament, tournamentDeadline,
 } from '@/lib/tournament/engine';
 import {
-  type ActionResponse, type AuctionRow, type ClientAction, type MemberRow, type RoomRow, type RoomSpeed,
+  type ActionResponse, type AuctionRow, type ClientAction, type MemberRow, type RoomMode, type RoomRow, type RoomSpeed,
   ROOM_SIZE, playerSeat, seatPlayerId,
 } from './types';
 
@@ -131,7 +131,15 @@ export async function leaveRoom(code: string, userId: string): Promise<Result> {
   return { ok: true };
 }
 
-export interface RoomSettings { botsEnabled?: boolean; speed?: RoomSpeed; maxPlayers?: number; showOverall?: boolean }
+export interface RoomSettings { botsEnabled?: boolean; speed?: RoomSpeed; maxPlayers?: number; showOverall?: boolean; mode?: RoomMode }
+
+const RANKED_NO_BOTS = 'A ranqueada é só entre pessoas: sem bots.';
+
+/** Convidado (login anônimo, migração 0006)? Sem a coluna ainda, ninguém é convidado. */
+async function isGuestUser(admin: Admin, userId: string): Promise<boolean> {
+  const { data } = await admin.from('profiles').select('*').eq('id', userId).maybeSingle();
+  return !!(data as { is_guest?: boolean } | null)?.is_guest;
+}
 
 export async function updateRoomSettings(code: string, userId: string, settings: RoomSettings): Promise<Result> {
   const admin = createAdminClient();
@@ -140,7 +148,15 @@ export async function updateRoomSettings(code: string, userId: string, settings:
   if (room.host_id !== userId) return { ok: false, reason: 'Só o dono da sala pode mudar as configurações.' };
   if (room.status !== 'lobby') return { ok: false, reason: 'O draft já começou.' };
   const patch: Record<string, unknown> = {};
+  if (settings.mode === 'ranked' && room.mode !== 'ranked') {
+    if (await isGuestUser(admin, userId)) return { ok: false, reason: 'Convidados não jogam ranqueada. Crie uma conta para valer elo.' };
+    const members = await getMembers(admin, room.id);
+    if (members.some(m => !m.user_id)) return { ok: false, reason: `${RANKED_NO_BOTS} Remova os bots antes.` };
+  }
+  if (settings.mode === 'ranked' || settings.mode === 'casual') patch.mode = settings.mode;
   if (settings.botsEnabled != null) patch.bots_enabled = settings.botsEnabled;
+  // O banco exige bots desligados na ranqueada (constraint ranked_without_bots).
+  if ((patch.mode ?? room.mode) === 'ranked') patch.bots_enabled = false;
   if (settings.speed) patch.speed = settings.speed;
   if (settings.showOverall != null) patch.show_overall = settings.showOverall;
   if (settings.maxPlayers != null) {
@@ -172,6 +188,7 @@ export async function addBot(code: string, userId: string): Promise<Result> {
   if (!room) return { ok: false, reason: 'Sala não encontrada.' };
   if (room.host_id !== userId) return { ok: false, reason: 'Só o dono da sala pode adicionar bots.' };
   if (room.status !== 'lobby') return { ok: false, reason: 'O draft já começou.' };
+  if (room.mode === 'ranked') return { ok: false, reason: RANKED_NO_BOTS };
   for (let attempt = 0; attempt < 3; attempt++) {
     const members = await getMembers(admin, room.id);
     const seat = [...Array(room.max_players).keys()].find(i => !members.some(m => m.seat === i));
@@ -196,6 +213,7 @@ export async function fillWithBots(code: string, userId: string): Promise<Result
   const { room, members } = found;
   if (room.host_id !== userId) return { ok: false, reason: 'Só o dono da sala pode adicionar bots.' };
   if (room.status !== 'lobby') return { ok: false, reason: 'O draft já começou.' };
+  if (room.mode === 'ranked') return { ok: false, reason: RANKED_NO_BOTS };
   const free = [...Array(room.max_players).keys()].filter(i => !members.some(m => m.seat === i));
   if (!free.length) return { ok: false, reason: 'Não há vaga livre.' };
   const used = new Set(members.map(m => m.display_name));
@@ -233,6 +251,10 @@ export async function startDraft(code: string, userId: string, now = Date.now(),
   if (room.status !== 'lobby') return { ok: false, reason: 'O draft já começou.' };
 
   let members = found.members;
+  if (room.mode === 'ranked') {
+    if (opts.fillBots || members.some(m => !m.user_id)) return { ok: false, reason: RANKED_NO_BOTS };
+    if (members.length < 2) return { ok: false, reason: 'A ranqueada precisa de pelo menos 2 jogadores.' };
+  }
   const notReady = opts.fillBots ? [] : members.filter(m => m.user_id && !m.ready);
   if (notReady.length) return { ok: false, reason: `Falta ficar pronto: ${notReady.map(m => m.display_name).join(', ')}.` };
   const free = opts.fillBots ? [...Array(room.max_players).keys()].filter(i => !members.some(m => m.seat === i)) : [];

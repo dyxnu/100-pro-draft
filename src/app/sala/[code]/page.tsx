@@ -1,9 +1,11 @@
 import type { Metadata } from 'next';
 import Link from 'next/link';
 import { notFound, redirect } from 'next/navigation';
-import { createClient, getCurrentUser } from '@/lib/supabase/server';
+import { type Profile, createClient, getCurrentUser } from '@/lib/supabase/server';
 import { normalizeCode } from '@/lib/rooms/service';
-import { type AuctionRow, type MemberRow, type RoomRow, seatPlayerId } from '@/lib/rooms/types';
+import { type AuctionRow, type LobbyRank, type MemberRow, type RoomRow, seatPlayerId } from '@/lib/rooms/types';
+import { type Tier, TIER_COLOR, rankLabel } from '@/lib/progress/rank';
+import { type RoomHuman, RoomShell } from '@/components/chat/RoomSocial';
 import { botAvatar } from '@/lib/profile/avatars';
 import { LobbyView } from '@/components/draft/LobbyView';
 import { AuctionView } from '@/components/draft/AuctionView';
@@ -35,24 +37,42 @@ export default async function SalaPage({ params }: Params) {
   const list = [...(members ?? [])].sort((a, b) => a.seat - b.seat);
   const me = list.find(m => m.user_id === session.user.id) ?? null;
 
-  // Ícone de cada vaga: o do perfil para pessoas, um fixo para bots.
+  // Ícone de cada vaga: o do perfil para pessoas, um fixo para bots. Elo e "convidado" também vêm daqui
+  // (select('*') para não quebrar se a migração 0006 ainda não criou as colunas).
   const userIds = list.flatMap(m => (m.user_id ? [m.user_id] : []));
   const { data: profs } = userIds.length
-    ? await supabase.from('profiles').select('id, avatar_url').in('id', userIds)
-    : { data: [] as { id: string; avatar_url: string | null }[] };
-  const avatarOf = new Map((profs ?? []).map(p => [p.id, p.avatar_url]));
+    ? await supabase.from('profiles').select('*').in('id', userIds)
+    : { data: [] as Partial<Profile>[] };
+  const profOf = new Map(((profs ?? []) as Partial<Profile>[]).map(p => [p.id, p]));
   const avatars: Record<string, string> = {};
+  const ranks: Record<string, LobbyRank> = {};
   for (const m of list) {
-    const a = m.user_id ? avatarOf.get(m.user_id) : botAvatar(m.seat);
+    const p = m.user_id ? profOf.get(m.user_id) : null;
+    const a = m.user_id ? p?.avatar_url : botAvatar(m.seat);
     if (a) avatars[seatPlayerId(m.seat)] = a;
+    if (m.user_id && p && 'lp' in p) {
+      const tier = (p.rank_tier ?? null) as Tier | null;
+      ranks[m.user_id] = {
+        label: rankLabel({ tier, division: p.rank_division ?? null, lp: p.lp ?? 0 }),
+        color: tier ? TIER_COLOR[tier] ?? null : null,
+        guest: !!p.is_guest,
+      };
+    }
   }
+  const meGuest = !!session.profile?.is_guest;
+  const humans: RoomHuman[] = list.flatMap(m => (m.user_id ? [{
+    userId: m.user_id, name: m.display_name, avatar: avatars[seatPlayerId(m.seat)] ?? null, guest: !!ranks[m.user_id]?.guest,
+  }] : []));
 
   if (room.status === 'abandoned') {
     return <Message title="Sala encerrada" text="Todos saíram desta sala antes do draft começar." />;
   }
 
   if (room.status === 'lobby') {
-    return <LobbyView room={room} members={list} meId={session.user.id} isMember={!!me} avatars={avatars} myAvatar={session.profile?.avatar_url ?? null} />;
+    return (
+      <LobbyView room={room} members={list} meId={session.user.id} isMember={!!me} avatars={avatars}
+        myAvatar={session.profile?.avatar_url ?? null} ranks={ranks} meGuest={meGuest} />
+    );
   }
 
   const auction = Array.isArray(auctionRel) ? auctionRel[0] ?? null : auctionRel;
@@ -60,16 +80,18 @@ export default async function SalaPage({ params }: Params) {
     return <Message title="Draft em andamento" text="Esse draft já começou e você não está nesta sala." />;
   }
   return (
-    <AuctionView
-      code={room.code}
-      roomId={room.id}
-      initialState={auction.state}
-      initialTournament={auction.tournament ?? null}
-      initialNextTickAt={auction.next_tick_at ? Date.parse(auction.next_tick_at) : null}
-      serverNow={Date.now()}
-      mySeat={me?.seat ?? null}
-      avatars={avatars}
-    />
+    <RoomShell roomId={room.id} meId={session.user.id} meGuest={meGuest} isMember={!!me} humans={humans}>
+      <AuctionView
+        code={room.code}
+        roomId={room.id}
+        initialState={auction.state}
+        initialTournament={auction.tournament ?? null}
+        initialNextTickAt={auction.next_tick_at ? Date.parse(auction.next_tick_at) : null}
+        serverNow={Date.now()}
+        mySeat={me?.seat ?? null}
+        avatars={avatars}
+      />
+    </RoomShell>
   );
 }
 
