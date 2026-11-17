@@ -8,5 +8,5 @@ export default defineConfig({
       'server-only': fileURLToPath(new URL('./src/test/empty.ts', import.meta.url)),
     },
   },
-  test: { testTimeout: 120_000 },
+  test: { testTimeout: 120_000, exclude: ['**/node_modules/**', '.claude/**', '.next/**'] },
 });
